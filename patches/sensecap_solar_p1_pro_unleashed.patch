@@ -1,0 +1,1952 @@
+diff --git a/examples/simple_repeater/MyMesh.cpp b/examples/simple_repeater/MyMesh.cpp
+index 746ad91..b50ff31 100644
+--- a/examples/simple_repeater/MyMesh.cpp
++++ b/examples/simple_repeater/MyMesh.cpp
+@@ -555,11 +555,11 @@ int MyMesh::calcRxDelay(float score, uint32_t air_time) const {
+ }
+ 
+ uint32_t MyMesh::getRetransmitDelay(const mesh::Packet *packet) {
+-  uint32_t t = (_radio->getEstAirtimeFor(packet->getPathByteLen() + packet->payload_len + 2) * _prefs.tx_delay_factor);
++  uint32_t t = (_radio->getEstAirtimeFor(packet->getRawLength()) * _prefs.tx_delay_factor);
+   return getRNG()->nextInt(0, 5*t + 1);
+ }
+ uint32_t MyMesh::getDirectRetransmitDelay(const mesh::Packet *packet) {
+-  uint32_t t = (_radio->getEstAirtimeFor(packet->getPathByteLen() + packet->payload_len + 2) * _prefs.direct_tx_delay_factor);
++  uint32_t t = (_radio->getEstAirtimeFor(packet->getRawLength()) * _prefs.direct_tx_delay_factor);
+   return getRNG()->nextInt(0, 5*t + 1);
+ }
+ 
+@@ -869,9 +869,13 @@ void MyMesh::sendNodeDiscoverReq() {
+   }
+ }
+ 
++#ifndef PACKET_POOL_SIZE
++  #define PACKET_POOL_SIZE 32
++#endif
++
+ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondClock &ms, mesh::RNG &rng,
+                mesh::RTCClock &rtc, mesh::MeshTables &tables)
+-    : mesh::Mesh(radio, ms, rng, rtc, *new StaticPoolPacketManager(32), tables),
++    : mesh::Mesh(radio, ms, rng, rtc, *new StaticPoolPacketManager(PACKET_POOL_SIZE), tables),
+       region_map(key_store), temp_map(key_store),
+       _cli(board, rtc, sensors, region_map, acl, &_prefs, this),
+       telemetry(MAX_PACKET_PAYLOAD - 4),
+@@ -917,7 +921,15 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
+   _prefs.flood_max_unscoped = 64;
+   _prefs.flood_max_advert = 8;
+   _prefs.interference_threshold = 0; // disabled
++#if defined(_SEEED_SENSECAP_SOLAR_H_)
++  // S3-F7 & S3-F8: Enable tickless CPU power saving, hardware LoRa CAD before TX,
++  // and 60s (15 * 4s) periodic AGC + noise-floor refresh by default on SenseCAP Solar P1-Pro.
++  _prefs.powersaving_enabled = 1;
++  _prefs.cad_enabled = 1;
++  _prefs.agc_reset_interval = 15;
++#else
+   _prefs.cad_enabled = 0;            // hardware CAD before TX (off by default; 'set cad on')
++#endif
+   _prefs.loop_detect = LOOP_DETECT_MINIMAL;
+ 
+   // bridge defaults
+diff --git a/examples/simple_repeater/main.cpp b/examples/simple_repeater/main.cpp
+index e36a919..3009c7c 100644
+--- a/examples/simple_repeater/main.cpp
++++ b/examples/simple_repeater/main.cpp
+@@ -26,6 +26,9 @@ SimpleMeshTables tables;
+ MyMesh the_mesh(board, radio_driver, *new ArduinoMillis(), fast_rng, rtc_clock, tables);
+ 
+ void halt() {
++  // S4-F2: Reboot instead of spinning in an infinite busy-loop draining the solar battery
++  delay(1000);
++  board.reboot();
+   while (1) ;
+ }
+ 
+@@ -44,9 +47,11 @@ static unsigned long userBtnDownAt = 0;
+ 
+ void setup() {
+   Serial.begin(115200);
+-  delay(1000);
+ 
++  // S3-F6: Run board.begin() (and checkBootVoltage() + DC-DC enable) immediately
++  // before any startup delay so brownout boot-loops do not waste 1000 ms of active current.
+   board.begin();
++  delay(1000);
+ 
+ #ifdef HAS_EXTERNAL_WATCHDOG
+   external_watchdog.begin();
+diff --git a/platformio.ini b/platformio.ini
+index 84e1d34..1db7201 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -180,6 +180,7 @@ build_src_filter =
+   -<*>
+   +<../src/Utils.cpp>
+   +<../src/Packet.cpp>
++  +<../src/helpers/TransportKeyStore.cpp>
+   +<../src/helpers/ConfigSerializer.cpp>
+   +<../src/helpers/DynamicConfigSerializer.cpp>
+ lib_deps =
+diff --git a/src/Dispatcher.cpp b/src/Dispatcher.cpp
+index 350671e..3bcdab7 100644
+--- a/src/Dispatcher.cpp
++++ b/src/Dispatcher.cpp
+@@ -110,7 +110,7 @@ void Dispatcher::loop() {
+       }
+ 
+       _radio->onSendFinished();
+-      logTx(outbound, 2 + outbound->getPathByteLen() + outbound->payload_len);
++      logTx(outbound, outbound->getRawLength());
+       if (outbound->isRouteFlood()) {
+         n_sent_flood++;
+       } else {
+@@ -123,7 +123,7 @@ void Dispatcher::loop() {
+       MESH_DEBUG_PRINTLN("%s Dispatcher::loop(): WARNING: outbound packed send timed out!", getLogDateTime());
+ 
+       _radio->onSendFinished();
+-      logTxFail(outbound, 2 + outbound->getPathByteLen() + outbound->payload_len);
++      logTxFail(outbound, outbound->getRawLength());
+ 
+       releasePacket(outbound);  // return to pool
+       outbound = NULL;
+@@ -206,6 +206,7 @@ void Dispatcher::checkRecv() {
+ 
+       pkt = _mgr->allocNew();
+       if (pkt == NULL) {
++        _err_flags |= ERR_EVENT_FULL;
+         MESH_DEBUG_PRINTLN("%s Dispatcher::checkRecv(): WARNING: received data, no unused packets available!", getLogDateTime());
+       } else {
+         if (tryParsePacket(pkt, raw, len)) {
+@@ -283,7 +284,20 @@ void Dispatcher::checkSend() {
+   
+   updateTxBudget();
+   
+-  uint32_t est_airtime = _radio->getEstAirtimeFor(MAX_TRANS_UNIT);
++  // S3-F5: Estimate airtime against actual queued packet size instead of worst-case MAX_TRANS_UNIT (255B)
++  // so short ACKs and direct control frames are not starved during high-density repeater bursts.
++  int next_len = MAX_TRANS_UNIT;
++  int total_q = _mgr->getOutboundTotal();
++  for (int i = 0; i < total_q; i++) {
++    Packet* cand = _mgr->getOutboundByIdx(i);
++    if (cand) {
++      int raw_len = cand->getRawLength();
++      if (raw_len > 0 && raw_len < next_len) {
++        next_len = raw_len;
++      }
++    }
++  }
++  uint32_t est_airtime = _radio->getEstAirtimeFor(next_len);
+   if (tx_budget_ms < est_airtime / MIN_TX_BUDGET_AIRTIME_DIV) {
+     float duty_cycle = 1.0f / (1.0f + getAirtimeBudgetFactor());
+     unsigned long needed = est_airtime / MIN_TX_BUDGET_AIRTIME_DIV - tx_budget_ms;
+diff --git a/src/helpers/IdentityStore.h b/src/helpers/IdentityStore.h
+index 73270b0..9bb34a2 100644
+--- a/src/helpers/IdentityStore.h
++++ b/src/helpers/IdentityStore.h
+@@ -8,6 +8,9 @@
+   #define FILESYSTEM  Adafruit_LittleFS
+ 
+   using namespace Adafruit_LittleFS_Namespace;
++#else
++  struct MockFileSystem { bool mkdir(const char*) { return true; } };
++  #define FILESYSTEM  MockFileSystem
+ #endif
+ #include <Identity.h>
+ 
+diff --git a/src/helpers/NRF52Board.cpp b/src/helpers/NRF52Board.cpp
+index f2fa774..244ef57 100644
+--- a/src/helpers/NRF52Board.cpp
++++ b/src/helpers/NRF52Board.cpp
+@@ -119,7 +119,6 @@ bool NRF52Board::checkBootVoltage(const PowerMgtConfig* config) {
+   // Skip check if externally powered
+   if (isExternalPowered()) {
+     MESH_DEBUG_PRINTLN("PWRMGT: Boot check skipped (external power)");
+-    boot_voltage_mv = getBattMilliVolts();
+     return true;
+   }
+ 
+@@ -192,11 +191,18 @@ void NRF52Board::configureVoltageWake(uint8_t ain_channel, uint8_t lpcomp_refsel
+   NRF_LPCOMP->ENABLE = LPCOMP_ENABLE_ENABLE_Disabled;
+ 
+   // Select analog input (AIN0-7 maps to PSEL 0-7)
+-  NRF_LPCOMP->PSEL = ((uint32_t)PWRMGT_LPCOMP_AIN << LPCOMP_PSEL_PSEL_Pos) & LPCOMP_PSEL_PSEL_Msk;
++  NRF_LPCOMP->PSEL = ((uint32_t)ain_channel << LPCOMP_PSEL_PSEL_Pos) & LPCOMP_PSEL_PSEL_Msk;
+ 
+   // Reference: REFSEL (0-6=1/8..7/8, 7=ARef, 8-15=1/16..15/16)
+   NRF_LPCOMP->REFSEL = ((uint32_t)lpcomp_refsel << LPCOMP_REFSEL_REFSEL_Pos) & LPCOMP_REFSEL_REFSEL_Msk;
+ 
++  // Enable 50 mV hardware hysteresis to prevent boot-chatter loops on solar MPPT ripple
++#ifdef LPCOMP_HYST_HYST_Hyst50mV
++  NRF_LPCOMP->HYST = LPCOMP_HYST_HYST_Hyst50mV;
++#else
++  NRF_LPCOMP->HYST = 1;
++#endif
++
+   // Detect UP events (voltage rises above threshold for battery recovery)
+   NRF_LPCOMP->ANADETECT = LPCOMP_ANADETECT_ANADETECT_Up;
+ 
+@@ -219,12 +225,12 @@ void NRF52Board::configureVoltageWake(uint8_t ain_channel, uint8_t lpcomp_refsel
+   }
+ 
+   if (lpcomp_refsel == 7) {
+-    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=ARef)", PWRMGT_LPCOMP_AIN);
++    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=ARef)", ain_channel);
+   } else if (lpcomp_refsel <= 6) {
+-    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=%d/8 VDD)", PWRMGT_LPCOMP_AIN, lpcomp_refsel + 1);
++    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=%d/8 VDD)", ain_channel, lpcomp_refsel + 1);
+   } else {
+     uint8_t ref_num = (uint8_t)((lpcomp_refsel - 8) * 2 + 1);
+-    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=%d/16 VDD)", PWRMGT_LPCOMP_AIN, ref_num);
++    MESH_DEBUG_PRINTLN("PWRMGT: LPCOMP wake armed (AIN%d, ref=%d/16 VDD)", ain_channel, ref_num);
+   }
+ }
+ 
+@@ -283,13 +289,8 @@ void NRF52Board::sleep(uint32_t secs) {
+   sd_softdevice_is_enabled(&sd_enabled);
+ 
+   if (sd_enabled) {
+-    // first call processes pending softdevice events, second call sleeps.
+-    sd_app_evt_wait();
+     sd_app_evt_wait();
+   } else {
+-    // softdevice is disabled, use raw WFE
+-    __SEV();
+-    __WFE();
+     __WFE();
+   }
+ }
+diff --git a/src/helpers/SimpleMeshTables.h b/src/helpers/SimpleMeshTables.h
+index 9e6c3e7..f32a31d 100644
+--- a/src/helpers/SimpleMeshTables.h
++++ b/src/helpers/SimpleMeshTables.h
+@@ -6,7 +6,13 @@
+   #include <FS.h>
+ #endif
+ 
+-#define MAX_PACKET_HASHES  (128+32)
++#ifndef MAX_PACKET_HASHES
++  #if defined(_SEEED_SENSECAP_SOLAR_H_)
++    #define MAX_PACKET_HASHES  512
++  #else
++    #define MAX_PACKET_HASHES  (128+32)
++  #endif
++#endif
+ 
+ class SimpleMeshTables : public mesh::MeshTables {
+   uint8_t _hashes[MAX_PACKET_HASHES*MAX_HASH_SIZE];
+diff --git a/src/helpers/TransportKeyStore.cpp b/src/helpers/TransportKeyStore.cpp
+index f34610b..6361de7 100644
+--- a/src/helpers/TransportKeyStore.cpp
++++ b/src/helpers/TransportKeyStore.cpp
+@@ -25,12 +25,21 @@ bool TransportKey::isNull() const {
+ }
+ 
+ void TransportKeyStore::putCache(uint16_t id, const TransportKey& key) {
++  for (int i = 0; i < num_cache; i++) {
++    if (cache_ids[i] == id) {
++      cache_keys[i] = key;
++      return;
++    }
++  }
+   if (num_cache < MAX_TKS_ENTRIES) {
+     cache_ids[num_cache] = id;
+     cache_keys[num_cache] = key;
+     num_cache++;
+   } else {
+-    // TODO: evict oldest cache entry
++    // S3-F1: Circular FIFO eviction when TransportKeyStore cache is full
++    cache_ids[next_evict_idx] = id;
++    cache_keys[next_evict_idx] = key;
++    next_evict_idx = (next_evict_idx + 1) % MAX_TKS_ENTRIES;
+   }
+ }
+ 
+diff --git a/src/helpers/TransportKeyStore.h b/src/helpers/TransportKeyStore.h
+index e3ba152..d7cb848 100644
+--- a/src/helpers/TransportKeyStore.h
++++ b/src/helpers/TransportKeyStore.h
+@@ -11,18 +11,21 @@ struct TransportKey {
+   bool isNull() const;
+ };
+ 
+-#define MAX_TKS_ENTRIES   16
++#ifndef MAX_TKS_ENTRIES
++  #define MAX_TKS_ENTRIES   64
++#endif
+ 
+ class TransportKeyStore {
+   uint16_t     cache_ids[MAX_TKS_ENTRIES];
+   TransportKey cache_keys[MAX_TKS_ENTRIES];
+   int num_cache;
++  int next_evict_idx;
+ 
+   void putCache(uint16_t id, const TransportKey& key);
+-  void invalidateCache() { num_cache = 0; }
++  void invalidateCache() { num_cache = 0; next_evict_idx = 0; }
+ 
+ public:
+-  TransportKeyStore() { num_cache = 0; }
++  TransportKeyStore() : num_cache(0), next_evict_idx(0) { }
+   void getAutoKeyFor(uint16_t id, const char* name, TransportKey& dest);
+   int loadKeysFor(uint16_t id, TransportKey keys[], int max_num);
+   bool saveKeysFor(uint16_t id, const TransportKey keys[], int num);
+diff --git a/src/helpers/radiolib/CustomSX1262.h b/src/helpers/radiolib/CustomSX1262.h
+index 24a6e64..e5201a6 100644
+--- a/src/helpers/radiolib/CustomSX1262.h
++++ b/src/helpers/radiolib/CustomSX1262.h
+@@ -87,7 +87,7 @@ class CustomSX1262 : public SX1262 {
+       setRfSwitchPins(SX126X_RXEN, SX126X_TXEN);
+   #endif 
+ 
+-  // for improved RX with Heltec v4
++  // for improved RX with Heltec v4 and high-gain omni antennas
+   #ifdef SX126X_REGISTER_PATCH
+     uint8_t r_data = 0;
+     readRegister(0x8B5, &r_data, 1);
+@@ -95,22 +95,65 @@ class CustomSX1262 : public SX1262 {
+     writeRegister(0x8B5, &r_data, 1);
+   #endif
+ 
++      // S2-F5: Calibrate image rejection for operating frequency and apply Semtech Errata 15.2 / 15.3
++      calibrateImage(LORA_FREQ);
++      {
++        uint8_t clamp_cfg = 0;
++        readRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
++        clamp_cfg |= 0x1E;
++        writeRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
++
++        uint8_t evt_mask = 0;
++        readRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &evt_mask, 1);
++        evt_mask |= 0x02;
++        writeRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &evt_mask, 1);
++      }
++
+       MESH_DEBUG_PRINTLN("SX1262 status=0x%02X device_errors=0x%04X", getStatus(), getDeviceErrors());
+ 
+       return true;  // success
+     }
+ 
+     bool isReceiving() {
+-      // 1.16 behaviour, restored: report only. The 1.17 rewrite ran its own
+-      // timers and CLEARED the receive IRQ flags (preamble/header/sync-word).
+-      // On a board whose DIO1 reaches no host GPIO -- the T-Display P4 wires it
+-      // to an I2C expander -- polling those flags is the only way a packet is
+-      // ever noticed, so wiping them made the radio permanently deaf: it could
+-      // transmit, but nothing was ever received (wadamesh#253). Boards with a
+-      // real DIO1 line were unaffected because their ISR had already latched
+-      // RX_DONE before anything cleared it.
+       uint32_t irq = getIrqFlags();
++  #if defined(MESH_RADIO_DIO1_POLLED)
+       return (irq & RADIOLIB_SX126X_IRQ_HEADER_VALID) || (irq & RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED);
++  #else
++      // S3-F3: On interrupt-driven DIO1 boards with high-gain antennas (e.g. 6.5 dBi omni),
++      // a single false preamble detection stays latched in the SX1262 IRQ register if no valid
++      // syncword/header follows, permanently blocking noise-floor sampling, AGC resets, and TX.
++      // Expire stale PREAMBLE_DETECTED / HEADER_VALID flags after their respective deadlines
++      // while NEVER clearing RADIOLIB_SX126X_IRQ_RX_DONE.
++      if (irq & RADIOLIB_SX126X_IRQ_RX_DONE) {
++        _activityAt = 0;
++        _headerSeen = false;
++        return false;
++      }
++      const bool hasPreamble = (irq & RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED) != 0;
++      const bool hasHeader = (irq & RADIOLIB_SX126X_IRQ_HEADER_VALID) != 0;
++      if (!hasPreamble && !hasHeader) {
++        _activityAt = 0;
++        _headerSeen = false;
++        return false;
++      }
++      const uint32_t now = millis();
++      if (_activityAt == 0) {
++        _activityAt = (now == 0) ? 1U : now;
++        _headerSeen = hasHeader;
++        return true;
++      }
++      if (hasHeader && !_headerSeen) {
++        _headerSeen = true;
++      }
++      const uint32_t timeout = _headerSeen ? (_preambleMillis + _maxPayloadMillis) : _preambleMillis;
++      if ((uint32_t)(now - _activityAt) > timeout) {
++        clearIrqStatus(RADIOLIB_SX126X_IRQ_PREAMBLE_DETECTED | RADIOLIB_SX126X_IRQ_HEADER_VALID);
++        _activityAt = 0;
++        _headerSeen = false;
++        return false;
++      }
++      return true;
++  #endif
+     }
+ 
+     void setPreambleMillis(uint32_t preambleMillis) {
+diff --git a/src/helpers/radiolib/CustomSX1262Wrapper.h b/src/helpers/radiolib/CustomSX1262Wrapper.h
+index b1c05df..9d82c18 100644
+--- a/src/helpers/radiolib/CustomSX1262Wrapper.h
++++ b/src/helpers/radiolib/CustomSX1262Wrapper.h
+@@ -14,9 +14,15 @@ public:
+ 
+   void setParams(float freq, float bw, uint8_t sf, uint8_t cr) override {
+     ((CustomSX1262 *)_radio)->setFrequency(freq);
++    ((CustomSX1262 *)_radio)->calibrateImage(freq);
+     ((CustomSX1262 *)_radio)->setSpreadingFactor(sf);
+     ((CustomSX1262 *)_radio)->setBandwidth(bw);
+     ((CustomSX1262 *)_radio)->setCodingRate(cr);
++    // S2-F5: Re-assert Semtech Errata 15.2 PA clamping fix after parameter updates
++    uint8_t clamp_cfg = 0;
++    ((CustomSX1262 *)_radio)->readRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
++    clamp_cfg |= 0x1E;
++    ((CustomSX1262 *)_radio)->writeRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
+     updatePreamble(sf);
+     PacketMillis pm = calcMaxPacketMillis(sf, bw, cr, preambleLengthForSF(sf));
+     ((CustomSX1262 *)_radio)->setPreambleMillis(pm.preambleMillis);
+diff --git a/src/helpers/radiolib/RadioLibWrappers.cpp b/src/helpers/radiolib/RadioLibWrappers.cpp
+index 1c54ffc..6cf1e97 100644
+--- a/src/helpers/radiolib/RadioLibWrappers.cpp
++++ b/src/helpers/radiolib/RadioLibWrappers.cpp
+@@ -8,8 +8,9 @@
+ #define STATE_TX_DONE    4
+ #define STATE_INT_READY 16
+ 
+-#define NUM_NOISE_FLOOR_SAMPLES  64
+-#define SAMPLING_THRESHOLD  14
++#define NUM_NOISE_FLOOR_SAMPLES   64
++#define NOISE_FLOOR_SEED_SAMPLES   8
++#define SAMPLING_THRESHOLD        14
+ 
+ static volatile uint8_t state = STATE_IDLE;
+ 
+@@ -93,7 +94,7 @@ void RadioLibWrapper::begin() {
+     setFlag(); // LoRa packet is already received
+   }
+ 
+-  _noise_floor = 0;
++  _noise_floor = -120;
+   _threshold = 0;
+   _cad_enabled = false;
+ 
+@@ -103,10 +104,17 @@ void RadioLibWrapper::begin() {
+ }
+ 
+ uint32_t RadioLibWrapper::getRngSeed() {
++#ifdef USE_CC310_HW_CRYPTO
++  // S1-F6: Use ARM CryptoCell-310 hardware TRNG instead of 32 SPI RSSI bit reads
++  uint32_t r = 0;
++  nRFCrypto.Random.generate((uint8_t*)&r, sizeof(r));
++  return r & 0x7FFFFFFFU;
++#else
+   rlwLock();
+   uint32_t r = _radio->random(0x7FFFFFFF);
+   rlwUnlock();
+   return r;
++#endif
+ }
+ 
+ void RadioLibWrapper::setTxPower(int8_t dbm) {
+@@ -143,14 +151,14 @@ void RadioLibWrapper::resetAGC() {
+   if ((state & STATE_INT_READY) != 0 || isReceivingPacket()) { rlwUnlock(); return; }
+ 
+   doResetAGC();
+-  state = STATE_IDLE;   // trigger a startReceive()
++  // S2-F2: Immediately re-arm continuous RX instead of leaving radio in STATE_IDLE until next recvRaw()
++  state = STATE_IDLE;
++  startRecv();
+   rlwUnlock();
+ 
+-  // Reset noise floor sampling so it reconverges from scratch.
+-  // Without this, a stuck _noise_floor of -120 makes the sampling threshold
+-  // too low (-106) to accept normal samples (~-105), self-reinforcing the
+-  // stuck value even after the receiver has recovered.
+-  _noise_floor = 0;
++  // S2-F3 & S2-F7: Restart 64-sample noise floor calibration WITHOUT zeroing _noise_floor.
++  // The first NOISE_FLOOR_SEED_SAMPLES (8) samples are accepted un-gated so the running mean
++  // adapts to the true ambient RF environment even if the prior floor was clamped at -120 dBm.
+   _num_floor_samples = 0;
+   _floor_sample_sum = 0;
+ }
+@@ -160,9 +168,20 @@ void RadioLibWrapper::loop() {
+     rlwLock();
+     if (!isReceivingPacket()) {
+       int rssi = getCurrentRSSI();
+-      if (rssi < _noise_floor + SAMPLING_THRESHOLD) {  // only consider samples below current floor + sampling THRESHOLD
+-        _num_floor_samples++;
+-        _floor_sample_sum += rssi;
++      if (rssi < -50) {
++        bool accept = false;
++        if (_num_floor_samples < NOISE_FLOOR_SEED_SAMPLES) {
++          accept = true;
++        } else {
++          int running_mean = _floor_sample_sum / (int)_num_floor_samples;
++          if (rssi < running_mean + SAMPLING_THRESHOLD) {
++            accept = true;
++          }
++        }
++        if (accept) {
++          _num_floor_samples++;
++          _floor_sample_sum += rssi;
++        }
+       }
+     }
+     rlwUnlock();
+@@ -276,6 +295,15 @@ int RadioLibWrapper::recvRaw(uint8_t* bytes, int sz) {
+     rlwUnlock();
+     return 0;
+   }
++#endif
++#if defined(P_LORA_DIO_1) && (P_LORA_DIO_1 >= 0) && !defined(MESH_RADIO_DIO1_POLLED)
++  // S2-F8: Level-triggered DIO1 recovery if a rising edge was missed while servicing another IRQ
++  if (!(state & STATE_INT_READY) && state == STATE_RX && digitalRead(P_LORA_DIO_1) == HIGH) {
++    if (pollRxDone()) {
++      rx_evt_count++;
++      state |= STATE_INT_READY;
++    }
++  }
+ #endif
+   if (state & STATE_INT_READY) {
+     len = _radio->getPacketLength();
+diff --git a/src/helpers/radiolib/RadioLibWrappers.h b/src/helpers/radiolib/RadioLibWrappers.h
+index f32b8fc..5ff237a 100644
+--- a/src/helpers/radiolib/RadioLibWrappers.h
++++ b/src/helpers/radiolib/RadioLibWrappers.h
+@@ -133,10 +133,9 @@ public:
+ 
+   void random(uint8_t* dest, size_t sz) override {
+ #ifdef USE_CC310_HW_CRYPTO
++    // S1-F6: CryptoCell-310 provides NIST SP 800-90B compliant hardware TRNG entropy
++    // directly without blocking for sz * 8 slow SPI radio RSSI reads.
+     nRFCrypto.Random.generate(dest, (uint16_t)sz);
+-    for (int i = 0; i < sz; i++) {
+-      dest[i] ^= _radio->randomByte() ^ (::random(0, 256) & 0xFF); // combine with Radio's entropy
+-    }
+ #else
+     for (int i = 0; i < sz; i++) {
+       dest[i] = _radio->randomByte() ^ (::random(0, 256) & 0xFF);
+diff --git a/src/helpers/radiolib/SX126xReset.h b/src/helpers/radiolib/SX126xReset.h
+index 472eb33..90f0c0e 100644
+--- a/src/helpers/radiolib/SX126xReset.h
++++ b/src/helpers/radiolib/SX126xReset.h
+@@ -9,9 +9,18 @@ inline void sx126xResetAGC(SX126x* radio, bool rx_boost_gain) {
+   radio->sleep(true);
+   radio->standby(RADIOLIB_SX126X_STANDBY_RC, true);
+ 
++  // S2-F1: Re-enable DIO3 TCXO before Calibrate(0x7F) so PLL/ADC/Image calibrate against
++  // the precision 32 MHz TCXO instead of the uncalibrated internal RC oscillator.
++#ifdef SX126X_DIO3_TCXO_VOLTAGE
++  if ((float)(SX126X_DIO3_TCXO_VOLTAGE) > 0.0f) {
++    radio->setTCXO(SX126X_DIO3_TCXO_VOLTAGE);
++  }
++#endif
++
+   uint8_t calData = RADIOLIB_SX126X_CALIBRATE_ALL;
+   radio->mod->SPIwriteStream(RADIOLIB_SX126X_CMD_CALIBRATE, &calData, 1, true, false);
+-  radio->mod->hal->delay(5);
++  // S2-F6: Poll BUSY directly after 50 us instead of blocking for 5 ms
++  radio->mod->hal->delayMicroseconds(50);
+   uint32_t start = millis();
+   while (radio->mod->hal->digitalRead(radio->mod->getGpio())) {
+     if (millis() - start > 50) break;
+@@ -22,12 +31,37 @@ inline void sx126xResetAGC(SX126x* radio, bool rx_boost_gain) {
+   // Re-calibrate for the actual operating frequency.
+   radio->calibrateImage(radio->freqMHz);
+ 
++  // S2-F1: Restore DC-DC buck regulator and OCP current limit after warm sleep + calibration
++#if !defined(SX126X_USE_REGULATOR_LDO) || !SX126X_USE_REGULATOR_LDO
++  radio->setRegulatorDCDC();
++#endif
++#ifdef SX126X_CURRENT_LIMIT
++  radio->setCurrentLimit(SX126X_CURRENT_LIMIT);
++#endif
++
+ #ifdef SX126X_DIO2_AS_RF_SWITCH
+   radio->setDio2AsRfSwitch(SX126X_DIO2_AS_RF_SWITCH);
+ #endif
+ #ifdef SX126X_RX_BOOSTED_GAIN
+   radio->setRxBoostedGainMode(rx_boost_gain);
+ #endif
++
++  // Semtech SX1262 Errata 15.2: PA clamping threshold protection at +22 dBm into high-Q antenna
++  {
++    uint8_t clamp_cfg = 0;
++    radio->readRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
++    clamp_cfg |= 0x1E;
++    radio->writeRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp_cfg, 1);
++  }
++
++  // Semtech SX1262 Errata 15.3: Clear RTC timeout event control bit
++  {
++    uint8_t evt_mask = 0;
++    radio->readRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &evt_mask, 1);
++    evt_mask |= 0x02;
++    radio->writeRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &evt_mask, 1);
++  }
++
+ #ifdef SX126X_REGISTER_PATCH
+   uint8_t r_data = 0;
+   radio->readRegister(0x8B5, &r_data, 1);
+diff --git a/src/helpers/sensors/EnvironmentSensorManager.cpp b/src/helpers/sensors/EnvironmentSensorManager.cpp
+index ba5dba9..2486133 100644
+--- a/src/helpers/sensors/EnvironmentSensorManager.cpp
++++ b/src/helpers/sensors/EnvironmentSensorManager.cpp
+@@ -759,6 +759,10 @@ bool EnvironmentSensorManager::setSettingValue(const char* name, const char* val
+ #if ENV_INCLUDE_GPS
+ void EnvironmentSensorManager::initBasicGPS() {
+ 
++  #ifdef PIN_GPS_STANDBY
++  pinMode(PIN_GPS_STANDBY, OUTPUT);
++  digitalWrite(PIN_GPS_STANDBY, HIGH);
++  #endif
+   Serial1.setPins(PIN_GPS_TX, PIN_GPS_RX);
+ 
+   #ifdef GPS_BAUD_RATE
+@@ -806,8 +810,7 @@ void EnvironmentSensorManager::initBasicGPS() {
+   } else {
+     MESH_DEBUG_PRINTLN("No GPS detected");
+   }
+-  _location->stop();
+-  gps_active = false; //Set GPS visibility off until setting is changed
++  stop_gps(); // S4-F1: Power down GPS AND tri-state UART1 TX/RX pins to prevent ESD diode back-powering
+ }
+ 
+ // gps code for rak might be moved to MicroNMEALoactionProvider
+@@ -923,6 +926,26 @@ void EnvironmentSensorManager::start_gps() {
+     return;
+   #endif
+ 
++  // S4-F1: Re-enable GNSS standby/reset control pins and UART1 before powering on GPS_EN
++#ifdef PIN_GPS_STANDBY
++  pinMode(PIN_GPS_STANDBY, OUTPUT);
++  digitalWrite(PIN_GPS_STANDBY, HIGH);
++#endif
++#ifdef PIN_GPS_RESET
++  pinMode(PIN_GPS_RESET, INPUT);
++#endif
++  Serial1.setPins(PIN_GPS_TX, PIN_GPS_RX);
++#ifdef GPS_BAUD_RATE
++  const uint32_t k_gps_baud_default = GPS_BAUD_RATE;
++#else
++  const uint32_t k_gps_baud_default = 9600;
++#endif
++#if defined(HAS_TOUCH_UI) && defined(ESP32)
++  Serial1.begin(touchPrefsGetGpsBaud(k_gps_baud_default));
++#else
++  Serial1.begin(k_gps_baud_default);
++#endif
++
+   _location->begin();
+   _location->reset();
+ 
+@@ -941,8 +964,45 @@ void EnvironmentSensorManager::stop_gps() {
+     return;
+   #endif
+ 
++  // S4-F1: Shut down UART1 peripheral BEFORE powering down GPS_EN (and disconnect RXD first
++  // so nRF52840 UARTE0 never hangs waiting for EVENTS_RXTO on a 0V break condition when
++  // GPS_EN goes LOW, nor when stop_gps() is called while UART1 is already disabled).
++#ifdef NRF52_PLATFORM
++  if (NRF_UARTE0->ENABLE != 0) {
++    NRF_UARTE0->PSEL.RXD = 0xFFFFFFFF;
++    Serial1.end();
++  }
++#else
++  Serial1.end();
++#endif
++
+   _location->stop();
+ 
++#ifdef PIN_GPS_TX
++  pinMode(PIN_GPS_TX, INPUT);
++  #ifdef NRF52_PLATFORM
++  nrf_gpio_cfg_default(g_ADigitalPinMap[PIN_GPS_TX]);
++  #endif
++#endif
++#ifdef PIN_GPS_RX
++  pinMode(PIN_GPS_RX, INPUT);
++  #ifdef NRF52_PLATFORM
++  nrf_gpio_cfg_default(g_ADigitalPinMap[PIN_GPS_RX]);
++  #endif
++#endif
++#ifdef PIN_GPS_STANDBY
++  pinMode(PIN_GPS_STANDBY, INPUT);
++  #ifdef NRF52_PLATFORM
++  nrf_gpio_cfg_default(g_ADigitalPinMap[PIN_GPS_STANDBY]);
++  #endif
++#endif
++#ifdef PIN_GPS_RESET
++  pinMode(PIN_GPS_RESET, INPUT);
++  #ifdef NRF52_PLATFORM
++  nrf_gpio_cfg_default(g_ADigitalPinMap[PIN_GPS_RESET]);
++  #endif
++#endif
++
+   #ifndef PIN_GPS_EN
+   MESH_DEBUG_PRINTLN("Stop GPS is N/A on this board. Actual GPS state unchanged");
+   #endif
+diff --git a/test/mocks/SHA256.h b/test/mocks/SHA256.h
+index 0cefe5c..0d28312 100644
+--- a/test/mocks/SHA256.h
++++ b/test/mocks/SHA256.h
+@@ -18,18 +18,27 @@ public:
+     const uint8_t* bytes = static_cast<const uint8_t*>(data);
+     for (size_t i = 0; i < len; i++) {
+       uint8_t b = bytes[i];
+-      _state[_len % 32] ^= b;
+-      _state[(_len + 1) % 32] += (uint8_t)((b >> 1) | (b << 7));
++      for (size_t j = 0; j < 32; j++) {
++        _state[j] = static_cast<uint8_t>((_state[j] * 33U) ^ (b + j + _len));
++      }
+       _len++;
+     }
+   }
+ 
+-  void finalize(uint8_t* hash, size_t hashLen) {
++  void finalize(void* hash, size_t hashLen) {
++    uint8_t* out = static_cast<uint8_t*>(hash);
+     for (size_t i = 0; i < hashLen; i++) {
+-      hash[i] = _state[i % 32];
++      out[i] = _state[i % 32];
+     }
+   }
+ 
+-  void resetHMAC(const uint8_t* key, size_t keyLen) {}
+-  void finalizeHMAC(const uint8_t* key, size_t keyLen, uint8_t* hash, size_t hashLen) {}
++  void resetHMAC(const void* key, size_t keyLen) {
++    _len = 0;
++    memset(_state, 0, sizeof(_state));
++    update(key, keyLen);
++  }
++  void finalizeHMAC(const void* key, size_t keyLen, void* hash, size_t hashLen) {
++    update(key, keyLen);
++    finalize(hash, hashLen);
++  }
+ };
+diff --git a/test/mocks/WVariant.h b/test/mocks/WVariant.h
+new file mode 100644
+index 0000000..384fa10
+--- /dev/null
++++ b/test/mocks/WVariant.h
+@@ -0,0 +1,8 @@
++#pragma once
++#include <stdint.h>
++#ifndef HIGH
++#define HIGH 1
++#endif
++#ifndef LOW
++#define LOW 0
++#endif
+diff --git a/test/test_sensecap_solar_seams/test_sensecap_solar_seams.cpp b/test/test_sensecap_solar_seams/test_sensecap_solar_seams.cpp
+new file mode 100644
+index 0000000..fdc62a4
+--- /dev/null
++++ b/test/test_sensecap_solar_seams/test_sensecap_solar_seams.cpp
+@@ -0,0 +1,206 @@
++#include <gtest/gtest.h>
++#include "../variants/sensecap_solar/variant.h"
++#include "../variants/sensecap_solar/SenseCapSolarSeams.h"
++#include "helpers/SimpleMeshTables.h"
++#include "helpers/TransportKeyStore.h"
++
++using namespace mesh;
++
++static Packet makeFloodPacketWithId(uint16_t id) {
++  Packet p;
++  p.header = ROUTE_TYPE_FLOOD | (PAYLOAD_TYPE_TXT_MSG << PH_TYPE_SHIFT);
++  p.payload[0] = (uint8_t)(id & 0xFF);
++  p.payload[1] = (uint8_t)((id >> 8) & 0xFF);
++  p.payload[2] = (uint8_t)((id * 31u) & 0xFF);
++  p.payload_len = 3;
++  p.path_len = 0;
++  return p;
++}
++
++// ============================================================================
++// Seam 1: Sub-Zero Winter (-15C Winter & Hochnebel) Battery & Power Seam
++// ============================================================================
++
++TEST(ColdWeatherBatterySeam, ExactDividerMultiplierEliminates43mVOverReport) {
++  // Hardware divider on XIAO nRF52840 Plus / SenseCAP Solar is R_top=1.00M, R_bot=510k.
++  // Scale = 1510 / 510 = 2.9607843f.
++  // Stock firmware used 3.0f (+1.325% error = +43mV at 3250mV).
++  EXPECT_NEAR(ADC_MULTIPLIER, 1510.0f / 510.0f, 0.0005f);
++
++  // At true V_BAT = 3100 mV, V_AIN7 = 3100 / (1510/510) = 1047.02 mV -> ADC count = 1430 (12-bit, 3.0V ref)
++  uint16_t mv = sensecap::adcToMilliVolts(1430, ADC_MULTIPLIER, AREF_VOLTAGE);
++  EXPECT_NEAR(mv, 3100, 3);
++}
++
++TEST(ColdWeatherBatterySeam, EmaFilterSuppressesSolarMpptRipple) {
++  uint16_t ema = 0;
++  ema = sensecap::updateBatteryEma(ema, 3600);
++  EXPECT_EQ(ema, 3600u);
++  // Single +80mV CN3165 MPPT switching spike should be damped by 4x (to +20mV)
++  ema = sensecap::updateBatteryEma(ema, 3680);
++  EXPECT_EQ(ema, 3620u);
++}
++
++TEST(ColdWeatherBatterySeam, ColdWeatherRuntimeMonitorCompensatesFor18650InternalResistance) {
++  uint8_t strikes = 0;
++
++  // At -12C (Sub-Zero winter night), NMC 18650 R_dc rises 3-5x.
++  // 1) At 3400mV and -12C (< 3450mV cold GPS shed threshold), GPS must be shed, no shutdown:
++  auto act1 = sensecap::evaluateColdWeatherBatteryState(3400, -12.0f, false, strikes);
++  EXPECT_TRUE(act1.shed_gps);
++  EXPECT_FALSE(act1.trigger_shutdown);
++  EXPECT_EQ(strikes, 0u);
++
++  // 2) At 3100mV and -12C (>= 3050mV cold cutoff, even though < 3150mV warm cutoff), NO shutdown strike:
++  auto act2 = sensecap::evaluateColdWeatherBatteryState(3100, -12.0f, false, strikes);
++  EXPECT_FALSE(act2.trigger_shutdown);
++  EXPECT_EQ(strikes, 0u);
++
++  // 3) Transient +22dBm TX sag to 3020mV for 2 checks (< 3 strikes) does NOT shut down:
++  auto act3 = sensecap::evaluateColdWeatherBatteryState(3020, -12.0f, false, strikes);
++  EXPECT_FALSE(act3.trigger_shutdown);
++  EXPECT_EQ(strikes, 1u);
++  auto act4 = sensecap::evaluateColdWeatherBatteryState(3020, -12.0f, false, strikes);
++  EXPECT_FALSE(act4.trigger_shutdown);
++  EXPECT_EQ(strikes, 2u);
++
++  // 4) Sustained 3rd consecutive check (90s) at 3020mV triggers protective low-voltage shutdown:
++  auto act5 = sensecap::evaluateColdWeatherBatteryState(3020, -12.0f, false, strikes);
++  EXPECT_TRUE(act5.trigger_shutdown);
++  EXPECT_EQ(strikes, 3u);
++}
++
++TEST(ColdWeatherBatterySeam, TwoStageHochnebelHibernateRecoversAt3250mVInsteadOf3664mV) {
++  // Below 3050mV -> Deep SYSTEMOFF with LPCOMP (REFSEL=2 + HYST=50mV)
++  EXPECT_EQ(sensecap::selectHibernateStage(3020, false),
++            sensecap::HibernateStage::DEEP_SYSTEMOFF_LPCOMP);
++
++  // Between 3050mV and 3249mV -> Low-power SYSTEMON RTC bandgap-SAADC poll (~3uA)
++  EXPECT_EQ(sensecap::selectHibernateStage(3150, false),
++            sensecap::HibernateStage::SYSTEMON_BANDGAP_POLL);
++
++  // At 3250mV (~12% SoC, <1 day of Sub-Zero winter Hochnebel diffuse light) -> Wake & Reboot!
++  EXPECT_EQ(sensecap::selectHibernateStage(3250, false),
++            sensecap::HibernateStage::WAKE_AND_REBOOT);
++}
++
++// ============================================================================
++// Seam 2: Wio-SX1262 + MikroTik 6.5 dBi Antenna RF & Noise Floor Seam
++// ============================================================================
++
++TEST(Sx1262And65dBiAntennaSeam, NoiseFloorCalibratorRecoversFromMinus120dBmWithoutZeroingFloor) {
++  sensecap::NoiseFloorTracker tracker;
++  EXPECT_EQ(tracker.noiseFloor(), 0);
++
++  // Initial convergence to -120 dBm (quiet test bench)
++  for (int i = 0; i < 64; i++) {
++    tracker.addSample(-121);
++  }
++  EXPECT_EQ(tracker.noiseFloor(), -120);
++
++  // Now simulate resetAGC() / recalibration trigger on a 6.5 dBi rooftop antenna
++  // where ambient urban noise floor is -102 dBm (>= -120 + 14 = -106 dBm!).
++  // Stock firmware either zeroed _noise_floor to 0 dBm for 64 loops or locked up forever at -120 dBm.
++  tracker.startCalibrationWindow();
++  // Published noise floor must remain -120 dBm while sampling is in progress (never 0 dBm!)
++  EXPECT_EQ(tracker.noiseFloor(), -120);
++
++  // Feed 64 ambient samples at -102 dBm plus 10 loud packet bursts at -65 dBm:
++  for (int i = 0; i < 8; i++) {
++    tracker.addSample(-102); // 8 seed samples establish new baseline
++  }
++  for (int i = 0; i < 10; i++) {
++    tracker.addSample(-65);  // Strong packet bursts (> -102 + 14) must be rejected!
++  }
++  for (int i = 0; i < 56; i++) {
++    tracker.addSample(-102); // Remaining 56 ambient samples
++  }
++
++  // Must converge to -102 dBm without locking up at -120 dBm or being corrupted by -65 dBm packets!
++  EXPECT_EQ(tracker.noiseFloor(), -102);
++}
++
++TEST(Sx1262And65dBiAntennaSeam, PreambleLatchTimeoutClearsStalePreambleWithoutTouchingRxDone) {
++  sensecap::PreambleTimeoutTracker tracker;
++  const uint32_t kPreambleMs = 83;
++  const uint32_t kPayloadMs = 2100;
++
++  // At t=1000ms, 6.5 dBi antenna picks up a brief ISM noise spike latching PREAMBLE_DETECTED (0x04)
++  bool clear_irq = false;
++  EXPECT_TRUE(tracker.evaluateIrq(0x04, false, false, 1000, kPreambleMs, kPayloadMs, clear_irq));
++  EXPECT_FALSE(clear_irq);
++
++  // At t=1050ms (< 1000 + 83ms), still waiting for header
++  EXPECT_TRUE(tracker.evaluateIrq(0x04, false, false, 1050, kPreambleMs, kPayloadMs, clear_irq));
++  EXPECT_FALSE(clear_irq);
++
++  // At t=1090ms (> 1000 + 83ms) with no HEADER_VALID and no RX_DONE -> must expire and request IRQ clear!
++  EXPECT_FALSE(tracker.evaluateIrq(0x04, false, false, 1090, kPreambleMs, kPayloadMs, clear_irq));
++  EXPECT_TRUE(clear_irq);
++}
++
++// ============================================================================
++// Seam 3: Repeater High-Density Mesh Tables & TransportKeyStore Cache Seam
++// ============================================================================
++
++TEST(RepeaterHighDensityTablesSeam, SimpleMeshTablesHoldsAtLeast512PacketHashesWithoutWrap) {
++  EXPECT_GE(MAX_PACKET_HASHES, 512);
++
++  SimpleMeshTables tables;
++  Packet first = makeFloodPacketWithId(1);
++  tables.markSeen(&first);
++  ASSERT_TRUE(tables.wasSeen(&first));
++
++  // Inject 400 distinct flood packets (exceeds stock 160-entry ring by 2.5x)
++  for (uint16_t id = 2; id <= 401; id++) {
++    Packet p = makeFloodPacketWithId(id);
++    tables.markSeen(&p);
++  }
++
++  // Packet #1 must STILL be remembered so late multi-hop echoes on the 6.5 dBi antenna are suppressed!
++  EXPECT_TRUE(tables.wasSeen(&first));
++}
++
++TEST(RepeaterHighDensityTablesSeam, TransportKeyStoreCachesMoreThan16RegionsAndEvictsCleanly) {
++  EXPECT_GE(MAX_TKS_ENTRIES, 32);
++
++  TransportKeyStore store;
++  TransportKey k_first{}, k_late{}, k_read{};
++
++  store.getAutoKeyFor(1, "#eu-metro-1", k_first);
++  for (uint16_t id = 2; id <= 25; id++) {
++    char name[32];
++    snprintf(name, sizeof(name), "#eu-region-region-%u", (unsigned)id);
++    TransportKey tmp{};
++    store.getAutoKeyFor(id, name, tmp);
++  }
++  // Region #25 (> stock 16 limit) and Region #1 must both be cached and retrievable via loadKeysFor()
++  EXPECT_EQ(store.loadKeysFor(25, &k_late, 1), 1);
++  EXPECT_EQ(store.loadKeysFor(1, &k_read, 1), 1);
++  EXPECT_EQ(memcmp(k_first.key, k_read.key, sizeof(k_first.key)), 0);
++}
++
++// ============================================================================
++// Seam 4: Pin Map Bounds & XIAO L76K Anti-Backpowering Seam
++// ============================================================================
++
++TEST(GpsAndPinBoundsSeam, PinCountMatchesDigitalPinMapAndDefinesL76kPins) {
++  // g_ADigitalPinMap in variants/sensecap_solar/variant.cpp has exactly 27 entries (0..26).
++  EXPECT_EQ(PINS_COUNT, 27);
++  EXPECT_EQ(NUM_DIGITAL_PINS, 27);
++#ifdef PIN_GPS_RESET
++  EXPECT_EQ(PIN_GPS_RESET, 17);
++#else
++  FAIL() << "PIN_GPS_RESET must be defined as 17 (P1.03)";
++#endif
++#ifdef PIN_GPS_EN
++  EXPECT_EQ(PIN_GPS_EN, 18);
++#else
++  FAIL() << "PIN_GPS_EN must be defined as 18 (P1.05)";
++#endif
++}
++
++int main(int argc, char** argv) {
++  ::testing::InitGoogleTest(&argc, argv);
++  return RUN_ALL_TESTS();
++}
+diff --git a/variants/sensecap_solar/SenseCapSolarBoard.cpp b/variants/sensecap_solar/SenseCapSolarBoard.cpp
+index da7964c..69e95fb 100644
+--- a/variants/sensecap_solar/SenseCapSolarBoard.cpp
++++ b/variants/sensecap_solar/SenseCapSolarBoard.cpp
+@@ -1,7 +1,11 @@
+ #include <Arduino.h>
++#include <SPI.h>
+ #include <Wire.h>
++#include <math.h>
++#include "nrf.h"
+ 
+ #include "SenseCapSolarBoard.h"
++#include "target.h"
+ 
+ #ifdef NRF52_POWER_MANAGEMENT
+ const PowerMgtConfig power_config = {
+@@ -9,15 +13,137 @@ const PowerMgtConfig power_config = {
+   .lpcomp_refsel = PWRMGT_LPCOMP_REFSEL,
+   .voltage_bootlock = PWRMGT_VOLTAGE_BOOTLOCK
+ };
++#endif
++
++void SenseCapSolarBoard::calibrateSaadcOffset() {
++  NRF_SAADC->ENABLE = SAADC_ENABLE_ENABLE_Enabled;
++  NRF_SAADC->EVENTS_CALIBRATEDONE = 0;
++  NRF_SAADC->TASKS_CALIBRATEOFFSET = 1;
++  uint32_t start_us = micros();
++  while (!NRF_SAADC->EVENTS_CALIBRATEDONE && (uint32_t)(micros() - start_us) < 2000U) {}
++  NRF_SAADC->EVENTS_CALIBRATEDONE = 0;
++  NRF_SAADC->EVENTS_STOPPED = 0;
++  NRF_SAADC->TASKS_STOP = 1;
++  start_us = micros();
++  while (!NRF_SAADC->EVENTS_STOPPED && (uint32_t)(micros() - start_us) < 2000U) {}
++  NRF_SAADC->EVENTS_STOPPED = 0;
++  NRF_SAADC->ENABLE = SAADC_ENABLE_ENABLE_Disabled;
++}
++
++uint16_t SenseCapSolarBoard::sampleRawBattMilliVolts() {
++  digitalWrite(VBAT_ENABLE, LOW);
++  analogReadResolution(12);
++  analogReference(AR_INTERNAL_3_0);
++  analogSampleTime(40);
++  analogOversampling(8);
++  int adcvalue = analogRead(BATTERY_PIN);
++  return sensecap::adcToMilliVolts(adcvalue, _adc_multiplier, AREF_VOLTAGE);
++}
++
++uint16_t SenseCapSolarBoard::getBattMilliVolts() {
++  // S1-F4 & S1-F14: Zero blocking delay while awake (VBAT_ENABLE stays LOW so filter cap stays charged),
++  // 40 us acquisition time for 337.7 kOhm source impedance, 8x hardware oversampling, and 1/4 EMA filter.
++  uint16_t sample_mv = sampleRawBattMilliVolts();
++  _ema_vbat_mv = sensecap::updateBatteryEma(_ema_vbat_mv, sample_mv);
++  return _ema_vbat_mv;
++}
++
++void SenseCapSolarBoard::shutdownPeripherals() {
++  // S1-F2: Shut down LoRa radio, GPS, CC310, LEDs, SPI, I2C, and QSPI flash before entering sleep/SystemOff
++  NRF52Board::shutdownPeripherals();
++  SPI.end();
++
++#ifdef LED_WHITE
++  digitalWrite(LED_WHITE, LOW);
++#endif
++#ifdef LED_BLUE
++  digitalWrite(LED_BLUE, LOW);
++#endif
++#ifdef SX126X_RXEN
++  pinMode(SX126X_RXEN, OUTPUT);
++  digitalWrite(SX126X_RXEN, LOW);
++#endif
+ 
++  // S4-F1: Eliminate 1-5 mA UART TX ESD back-powering and disconnect CMOS input buffers on powered-off L76K
++  if (NRF_UARTE0->ENABLE != 0) {
++    NRF_UARTE0->PSEL.RXD = 0xFFFFFFFF;
++    Serial1.end();
++  }
++  pinMode(GPS_EN, OUTPUT);
++  digitalWrite(GPS_EN, LOW);
++  const uint32_t kDisconnectPinCnf =
++      (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos) |
++      (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
++      (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos);
++  NRF_P0->PIN_CNF[2]  = kDisconnectPinCnf; // P0.02 GNSS_WAKEUP
++  NRF_P1->PIN_CNF[3]  = kDisconnectPinCnf; // P1.03 GNSS_RESET
++  NRF_P1->PIN_CNF[11] = kDisconnectPinCnf; // P1.11 GNSS_TX
++  NRF_P1->PIN_CNF[12] = kDisconnectPinCnf; // P1.12 GNSS_RX
++
++  Wire.end();
++  NRF_P0->PIN_CNF[9]  = kDisconnectPinCnf; // P0.09 Grove SDA
++  NRF_P0->PIN_CNF[10] = kDisconnectPinCnf; // P0.10 Grove SCL
++
++  // S1-F5: Ensure P25Q16H 2MB QSPI flash is in Deep Power-Down (<1 uA)
++  sensecapQspiFlashDeepPowerDown();
++}
++
++#ifdef NRF52_POWER_MANAGEMENT
+ void SenseCapSolarBoard::initiateShutdown(uint8_t reason) {
+-  bool enable_lpcomp = (reason == SHUTDOWN_REASON_LOW_VOLTAGE ||
+-                        reason == SHUTDOWN_REASON_BOOT_PROTECT);
++  shutdownPeripherals();
++
++  const bool is_low_voltage =
++      (reason == SHUTDOWN_REASON_LOW_VOLTAGE || reason == SHUTDOWN_REASON_BOOT_PROTECT);
++
++  if (is_low_voltage) {
++    // S1-F12: Two-Stage Sub-Zero Winter Hibernate
++    // Stage 1 (3050..3249 mV): Stay in ~3 uA SYSTEMON tickless RTC sleep and poll SAADC (0.6V internal
++    // reference) every 30s so the node recovers at 3250 mV (~12% SoC) instead of waiting for LPCOMP
++    // REFSEL=2 (3/8 VDD = 3664 mV = 42% SoC), which strands the node for 6-11 days in Hochnebel fog.
++    uint16_t vbat_mv = sampleRawBattMilliVolts();
++    while (sensecap::selectHibernateStage(vbat_mv, isExternalPowered()) ==
++           sensecap::HibernateStage::SYSTEMON_BANDGAP_POLL) {
++      // Turn off voltage divider between 30s probes to save 2.45 uA
++      digitalWrite(VBAT_ENABLE, HIGH);
++
++      for (uint8_t sec = 0; sec < 30; sec++) {
++        if (NRF_WDT->RUNSTATUS & WDT_RUNSTATUS_RUNSTATUS_Msk) {
++          NRF_WDT->RR[0] = WDT_RR_RR_Reload;
++        }
++        if (isExternalPowered()) {
++          NVIC_SystemReset();
++        }
++        delay(1000);
++      }
+ 
++      digitalWrite(VBAT_ENABLE, LOW);
++      delay(5);  // allow external divider filter cap to charge after 30s high-Z sleep
++      vbat_mv = sampleRawBattMilliVolts();
++      if (sensecap::selectHibernateStage(vbat_mv, isExternalPowered()) ==
++          sensecap::HibernateStage::WAKE_AND_REBOOT) {
++        NVIC_SystemReset();
++      }
++    }
++  }
++
++  // Stage 2 (<3050 mV critical) or user powerOff(): Enter <1 uA SYSTEMOFF with LPCOMP + button wake
+   pinMode(VBAT_ENABLE, OUTPUT);
+-  digitalWrite(VBAT_ENABLE, enable_lpcomp ? LOW : HIGH);
++  digitalWrite(VBAT_ENABLE, is_low_voltage ? LOW : HIGH);
++
++#ifdef PIN_BUTTON1
++  nrf_gpio_cfg_sense_input(
++      digitalPinToInterrupt(g_ADigitalPinMap[PIN_BUTTON1]),
++      NRF_GPIO_PIN_PULLUP,
++      NRF_GPIO_PIN_SENSE_LOW);
++#endif
++#ifdef PIN_BUTTON2
++  nrf_gpio_cfg_sense_input(
++      digitalPinToInterrupt(g_ADigitalPinMap[PIN_BUTTON2]),
++      NRF_GPIO_PIN_PULLUP,
++      NRF_GPIO_PIN_SENSE_LOW);
++#endif
+ 
+-  if (enable_lpcomp) {
++  if (is_low_voltage) {
+     configureVoltageWake(power_config.lpcomp_ain_channel, power_config.lpcomp_refsel);
+   }
+ 
+@@ -31,22 +157,23 @@ void SenseCapSolarBoard::begin() {
+   pinMode(BATTERY_PIN, INPUT);
+   pinMode(VBAT_ENABLE, OUTPUT);
+   digitalWrite(VBAT_ENABLE, LOW);
+-  analogReadResolution(12);
+-  analogReference(AR_INTERNAL_3_0);
+-  delay(50);
++  delay(5);  // initial filter capacitor charge
++
++  calibrateSaadcOffset();
++  float boot_temp = getMCUTemperature();
++  if (!isnan(boot_temp)) {
++    _last_cal_temp_c = boot_temp;
++  }
+ 
+ #ifdef PIN_USER_BTN
+   pinMode(PIN_USER_BTN, INPUT_PULLUP);
+ #elif defined(PIN_BUTTON1)
+   pinMode(PIN_BUTTON1, INPUT_PULLUP);
+ #endif
+-
+-#if defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
+-  Wire.setPins(PIN_WIRE_SDA, PIN_WIRE_SCL);
++#ifdef PIN_BUTTON2
++  pinMode(PIN_BUTTON2, INPUT_PULLUP);
+ #endif
+ 
+-  Wire.begin();
+-
+ #ifdef LED_WHITE
+   pinMode(LED_WHITE, OUTPUT);
+   digitalWrite(LED_WHITE, LOW);
+@@ -55,15 +182,182 @@ void SenseCapSolarBoard::begin() {
+   pinMode(LED_BLUE, OUTPUT);
+   digitalWrite(LED_BLUE, LOW);
+ #endif
+-
+ #ifdef P_LORA_TX_LED
+   pinMode(P_LORA_TX_LED, OUTPUT);
+   digitalWrite(P_LORA_TX_LED, LOW);
+ #endif
+ 
+ #ifdef NRF52_POWER_MANAGEMENT
++  // Run boot voltage check BEFORE starting I2C or external peripherals
+   checkBootVoltage(&power_config);
+ #endif
+ 
+-  delay(10);   // give sx1262 some time to power up
++  // S4-F2: Arm hardware watchdog (60s timeout, paused during SLEEP and HALT)
++  if (!(NRF_WDT->RUNSTATUS & WDT_RUNSTATUS_RUNSTATUS_Msk)) {
++    NRF_WDT->CONFIG = (WDT_CONFIG_SLEEP_Pause << WDT_CONFIG_SLEEP_Pos) |
++                      (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos);
++    NRF_WDT->CRV = 60UL * 32768UL;
++    NRF_WDT->RREN = WDT_RREN_RR0_Enabled << WDT_RREN_RR0_Pos;
++    NRF_WDT->TASKS_START = 1;
++  }
++  NRF_WDT->RR[0] = WDT_RR_RR_Reload;
++  _last_wdt_feed_ms = millis();
++  _last_pwr_check_ms = millis();
++
++#if defined(PIN_WIRE_SDA) && defined(PIN_WIRE_SCL)
++  Wire.setPins(PIN_WIRE_SDA, PIN_WIRE_SCL);
++#endif
++  Wire.begin();
++}
++
++void SenseCapSolarBoard::loop() {
++  const uint32_t now_ms = millis();
++
++  // S4-F2: Feed hardware watchdog at 1 Hz
++  if ((uint32_t)(now_ms - _last_wdt_feed_ms) >= 1000U) {
++    _last_wdt_feed_ms = now_ms;
++    if (NRF_WDT->RUNSTATUS & WDT_RUNSTATUS_RUNSTATUS_Msk) {
++      NRF_WDT->RR[0] = WDT_RR_RR_Reload;
++    }
++  }
++
++  // S1-F11: Sub-Zero winter battery & thermal monitor (runs every 30 seconds)
++  if ((uint32_t)(now_ms - _last_pwr_check_ms) >= 30000U) {
++    _last_pwr_check_ms = now_ms;
++
++    if (isExternalPowered()) {
++      _low_vbat_streak = 0;
++      return;
++    }
++
++    float mcu_temp_c = getMCUTemperature();
++    if (!isnan(mcu_temp_c) && fabsf(mcu_temp_c - _last_cal_temp_c) >= 10.0F) {
++      calibrateSaadcOffset();
++      _last_cal_temp_c = mcu_temp_c;
++    }
++
++    const uint16_t vbat_mv = getBattMilliVolts();
++    const float effective_temp_c = isnan(mcu_temp_c) ? 20.0F : mcu_temp_c;
++    const sensecap::ColdWeatherBatteryDecision decision = sensecap::evaluateColdWeatherBatteryState(
++        vbat_mv, effective_temp_c, false, _low_vbat_streak);
++
++#ifdef NRF52_POWER_MANAGEMENT
++    if (decision.trigger_shutdown) {
++      initiateShutdown(SHUTDOWN_REASON_LOW_VOLTAGE);
++      return;
++    }
++#endif
++
++    if (decision.shed_gps) {
++#if ENV_INCLUDE_GPS
++      if (sensors.getLocationProvider() != nullptr && sensors.getLocationProvider()->isEnabled()) {
++        sensors.setSettingValue("gps", "0");
++        _gps_shed_by_batt = true;
++      }
++#endif
++    } else if (_gps_shed_by_batt && decision.restore_gps) {
++#if ENV_INCLUDE_GPS
++      sensors.setSettingValue("gps", "1");
++#endif
++      _gps_shed_by_batt = false;
++    }
++  }
++}
++
++bool SenseCapSolarBoard::handleCommand(const char* command, uint32_t sender_timestamp, char* reply) {
++  (void)sender_timestamp;
++  while (*command == ' ') command++;
++
++  if (strcmp(command, "silicon") == 0) {
++    uint32_t var_raw = NRF_FICR->INFO.VARIANT;
++    char var_str[5] = {
++      (char)((var_raw >> 24) & 0xFF),
++      (char)((var_raw >> 16) & 0xFF),
++      (char)((var_raw >> 8) & 0xFF),
++      (char)(var_raw & 0xFF),
++      '\0'
++    };
++    for (int i = 0; i < 4; i++) {
++      if (var_str[i] < 0x20 || var_str[i] > 0x7E) var_str[i] = '?';
++    }
++    snprintf(
++        reply,
++        160,
++        "{\"part\":\"%lX\",\"var\":\"%s\",\"id\":\"%08lX%08lX\",\"dcdc\":%lu,\"nfc\":\"0x%08lX\",\"hf\":\"0x%05lX\",\"lf\":\"0x%05lX\",\"wdt\":%lu,\"usb\":\"0x%lX\"}",
++        (unsigned long)NRF_FICR->INFO.PART,
++        var_str,
++        (unsigned long)NRF_FICR->DEVICEID[1],
++        (unsigned long)NRF_FICR->DEVICEID[0],
++        (unsigned long)(NRF_POWER->DCDCEN & 1U),
++        (unsigned long)NRF_UICR->NFCPINS,
++        (unsigned long)NRF_CLOCK->HFCLKSTAT,
++        (unsigned long)NRF_CLOCK->LFCLKSTAT,
++        (unsigned long)(NRF_WDT->RUNSTATUS & 1U),
++        (unsigned long)NRF_POWER->USBREGSTATUS);
++    return true;
++  }
++
++  if (strcmp(command, "battdiag") == 0) {
++    uint16_t b_min = 0xFFFF;
++    uint16_t b_max = 0;
++    uint32_t sum_mv = 0;
++    uint32_t t0 = micros();
++    for (int i = 0; i < 16; i++) {
++      uint16_t v = sampleRawBattMilliVolts();
++      if (v < b_min) b_min = v;
++      if (v > b_max) b_max = v;
++      sum_mv += v;
++    }
++    uint32_t burst_us = (uint32_t)(micros() - t0);
++    uint16_t raw_mean = (uint16_t)((sum_mv + 8U) / 16U);
++    uint16_t ema_mv = getBattMilliVolts();
++    float temp_c = getMCUTemperature();
++    float eff_temp = isnan(temp_c) ? 20.0F : temp_c;
++    uint16_t crit_mv = (eff_temp < 0.0F) ? 3050U : 3150U;
++    snprintf(
++        reply,
++        160,
++        "{\"ema\":%u,\"raw\":%u,\"min16\":%u,\"max16\":%u,\"us16\":%lu,\"boot\":%u,\"temp\":%.2f,\"cal_t\":%.1f,\"cut\":%u,\"strk\":%u,\"ext\":%u}",
++        (unsigned)ema_mv,
++        (unsigned)raw_mean,
++        (unsigned)b_min,
++        (unsigned)b_max,
++        (unsigned long)burst_us,
++        (unsigned)getBootVoltage(),
++        (double)eff_temp,
++        (double)_last_cal_temp_c,
++        (unsigned)crit_mv,
++        (unsigned)_low_vbat_streak,
++        (unsigned)(isExternalPowered() ? 1U : 0U));
++    return true;
++  }
++
++  if (strcmp(command, "rfdiag") == 0) {
++    uint8_t rxgain = 0, ocp = 0, clamp = 0, evt = 0, xta = 0;
++    radio.readRegister(RADIOLIB_SX126X_REG_RX_GAIN, &rxgain, 1);
++    radio.readRegister(RADIOLIB_SX126X_REG_OCP_CONFIGURATION, &ocp, 1);
++    radio.readRegister(RADIOLIB_SX126X_REG_TX_CLAMP_CONFIG, &clamp, 1);
++    radio.readRegister(RADIOLIB_SX126X_REG_EVENT_MASK, &evt, 1);
++    radio.readRegister(0x08B5, &xta, 1);
++    uint16_t dev_err = radio.getDeviceErrors();
++    uint32_t irq = radio.getIrqFlags();
++    float inst_rssi = radio.getRSSI(false);
++    snprintf(
++        reply,
++        160,
++        "{\"rxg\":\"0x%02X\",\"ocp\":\"0x%02X\",\"clmp\":\"0x%02X\",\"evt\":\"0x%02X\",\"xta\":\"0x%02X\",\"err\":\"0x%04X\",\"irq\":\"0x%04lX\",\"rssi\":%.1f,\"qspi\":\"0x%lX\",\"gps\":\"0x%lX\"}",
++        (unsigned)rxgain,
++        (unsigned)ocp,
++        (unsigned)clamp,
++        (unsigned)evt,
++        (unsigned)xta,
++        (unsigned)dev_err,
++        (unsigned long)(irq & 0xFFFFU),
++        (double)inst_rssi,
++        (unsigned long)NRF_P0->PIN_CNF[20],
++        (unsigned long)NRF_P1->PIN_CNF[11]);
++    return true;
++  }
++
++  return false;
+ }
+diff --git a/variants/sensecap_solar/SenseCapSolarBoard.h b/variants/sensecap_solar/SenseCapSolarBoard.h
+index 5a8861c..0da5263 100644
+--- a/variants/sensecap_solar/SenseCapSolarBoard.h
++++ b/variants/sensecap_solar/SenseCapSolarBoard.h
+@@ -3,36 +3,59 @@
+ #include <MeshCore.h>
+ #include <Arduino.h>
+ #include <helpers/NRF52Board.h>
++#include "SenseCapSolarSeams.h"
+ 
+ class SenseCapSolarBoard : public NRF52BoardDCDC {
+ protected:
++  float _adc_multiplier = ADC_MULTIPLIER;
++  uint16_t _ema_vbat_mv = 0;
++  float _last_cal_temp_c = -1000.0F;
++  uint32_t _last_wdt_feed_ms = 0;
++  uint32_t _last_pwr_check_ms = 0;
++  uint8_t _low_vbat_streak = 0;
++  bool _gps_shed_by_batt = false;
++
++  void calibrateSaadcOffset();
++  uint16_t sampleRawBattMilliVolts();
++
+ #ifdef NRF52_POWER_MANAGEMENT
+   void initiateShutdown(uint8_t reason) override;
+ #endif
+ 
+ public:
+   SenseCapSolarBoard() : NRF52Board("SENSECAP_SOLAR_OTA") {}
+-  void begin();
++  void begin() override;
++  void loop() override;
++  void shutdownPeripherals() override;
++  bool handleCommand(const char* command, uint32_t sender_timestamp, char* reply) override;
+ 
+ #if defined(P_LORA_TX_LED)
+   void onBeforeTransmit() override {
+-    digitalWrite(P_LORA_TX_LED, HIGH);   // turn TX LED on
++    digitalWrite(P_LORA_TX_LED, HIGH);  // turn TX LED on
+   }
+   void onAfterTransmit() override {
+     digitalWrite(P_LORA_TX_LED, LOW);   // turn TX LED off
+   }
+ #endif
+ 
+-  uint16_t getBattMilliVolts() override {
+-    digitalWrite(VBAT_ENABLE, LOW);
+-    int adcvalue = 0;
+-    analogReadResolution(12);
+-    analogReference(AR_INTERNAL_3_0);
+-    delay(10);
+-    adcvalue = analogRead(BATTERY_PIN);
+-    return (adcvalue * ADC_MULTIPLIER * AREF_VOLTAGE) / 4.096;
++  bool setAdcMultiplier(float multiplier) override {
++    if (multiplier > 0.0F) {
++      _adc_multiplier = multiplier;
++    } else {
++      _adc_multiplier = ADC_MULTIPLIER;
++    }
++    return true;
++  }
++
++  float getAdcMultiplier() const override {
++    return _adc_multiplier;
+   }
+ 
++  bool hasUsbPowerDetect() const override { return true; }
++  bool isUsbPowered() override { return isExternalPowered(); }
++
++  uint16_t getBattMilliVolts() override;
++
+   const char* getManufacturerName() const override {
+     return "Seeed SenseCap Solar";
+   }
+@@ -42,13 +65,22 @@ public:
+     digitalWrite(LED_BLUE, LOW);
+ 
+ #ifdef PIN_USER_BTN
+-    while (digitalRead(PIN_USER_BTN) == LOW);
++    while (digitalRead(PIN_USER_BTN) == LOW) {
++      delay(10);
++    }
+     // Keep pull-up enabled in system-off so the wake line doesn't float low.
+-    nrf_gpio_cfg_sense_input(digitalPinToInterrupt(g_ADigitalPinMap[PIN_USER_BTN]), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
++    nrf_gpio_cfg_sense_input(
++        digitalPinToInterrupt(g_ADigitalPinMap[PIN_USER_BTN]),
++        NRF_GPIO_PIN_PULLUP,
++        NRF_GPIO_PIN_SENSE_LOW);
+ #elif defined(PIN_BUTTON1)
+-    while (digitalRead(PIN_BUTTON1) == LOW);
+-    // Keep pull-up enabled in system-off so the wake line doesn't float low.
+-    nrf_gpio_cfg_sense_input(digitalPinToInterrupt(g_ADigitalPinMap[PIN_BUTTON1]), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
++    while (digitalRead(PIN_BUTTON1) == LOW) {
++      delay(10);
++    }
++    nrf_gpio_cfg_sense_input(
++        digitalPinToInterrupt(g_ADigitalPinMap[PIN_BUTTON1]),
++        NRF_GPIO_PIN_PULLUP,
++        NRF_GPIO_PIN_SENSE_LOW);
+ #endif
+ 
+ #ifdef NRF52_POWER_MANAGEMENT
+diff --git a/variants/sensecap_solar/SenseCapSolarSeams.h b/variants/sensecap_solar/SenseCapSolarSeams.h
+new file mode 100644
+index 0000000..01d077c
+--- /dev/null
++++ b/variants/sensecap_solar/SenseCapSolarSeams.h
+@@ -0,0 +1,187 @@
++#pragma once
++
++#include <stdint.h>
++
++namespace sensecap {
++
++// S1-F13: Exact voltage divider ratio: (1.00 MOhm + 510 kOhm) / 510 kOhm = 1510 / 510 = 2.9607843f
++static constexpr float SENSECAP_ADC_MULTIPLIER = 1510.0F / 510.0F;
++
++// S1-F4 / S1-F14: Fast float conversion using 4096.0f (12-bit SAADC full scale)
++inline uint16_t adcToMilliVolts(
++    int raw_adc,
++    float adc_multiplier = SENSECAP_ADC_MULTIPLIER,
++    float aref_volts = 3.0F) {
++  if (raw_adc <= 0) {
++    return 0;
++  }
++  float mv = (static_cast<float>(raw_adc) * adc_multiplier * aref_volts * 1000.0F) / 4096.0F;
++  return static_cast<uint16_t>(mv + 0.5F);
++}
++
++// S1-F4: 1/4 exponential moving average filter to suppress CN3165 MPPT switching ripple
++inline uint16_t updateBatteryEma(uint16_t prev_ema_mv, uint16_t sample_mv) {
++  if (prev_ema_mv == 0) {
++    return sample_mv;
++  }
++  return static_cast<uint16_t>(
++      (static_cast<uint32_t>(prev_ema_mv) * 3U + static_cast<uint32_t>(sample_mv) + 2U) / 4U);
++}
++
++// S1-F11: Sub-Zero Winter (-15C winter, Hochnebel stratus fog) runtime battery state machine
++struct ColdWeatherBatteryDecision {
++  bool shed_gps;
++  bool restore_gps;
++  bool trigger_shutdown;
++};
++
++inline ColdWeatherBatteryDecision evaluateColdWeatherBatteryState(
++    uint16_t vbat_mv,
++    float mcu_temp_c,
++    bool external_powered,
++    uint8_t& consecutive_low_strikes) {
++  if (external_powered || vbat_mv < 1000U) {
++    consecutive_low_strikes = 0;
++    return {false, true, false};
++  }
++
++  // At < 0 C, Li-Ion charging is thermally inhibited and NMC 18650 internal resistance (R_dc)
++  // increases 3-5x (~350-600 mOhm), causing ~70-120 mV transient sag during +22 dBm LoRa TX.
++  // Lower critical cutoff to 3050 mV below 0 C (vs 3150 mV above 0 C) and shed 30 mA GPS early at 3450 mV.
++  const uint16_t crit_mv = (mcu_temp_c < 0.0F) ? 3050U : 3150U;
++  const uint16_t shed_gps_mv = (mcu_temp_c < 0.0F) ? 3450U : 3350U;
++  const uint16_t restore_gps_mv = (mcu_temp_c < 0.0F) ? 3550U : 3450U;
++
++  if (vbat_mv < crit_mv) {
++    if (consecutive_low_strikes < 255U) {
++      consecutive_low_strikes++;
++    }
++    return {true, false, consecutive_low_strikes >= 3U};
++  }
++
++  consecutive_low_strikes = 0;
++  if (vbat_mv < shed_gps_mv) {
++    return {true, false, false};
++  }
++  return {false, vbat_mv >= restore_gps_mv, false};
++}
++
++// S1-F12: Two-stage Sub-Zero Hochnebel hibernate selector
++// Because the 3.3V LDO enters dropout below 3.3V, V_AIN7 / VDD = 510/1510 = 0.3378 > 5/16 VDD,
++// forcing hardware LPCOMP to use REFSEL=2 (3/8 VDD = 3.664V = 42% SoC), which strands the repeater
++// for 6-11 days during Sub-Zero winter Hochnebel. Stage 1 keeps the MCU in ~3 uA SYSTEMON RTC sleep
++// polling the 0.6V internal bandgap SAADC every 30s so the node wakes at 3250 mV (~12% SoC).
++enum class HibernateStage : uint8_t {
++  DEEP_SYSTEMOFF_LPCOMP = 0,
++  SYSTEMON_BANDGAP_POLL = 1,
++  WAKE_AND_REBOOT = 2
++};
++
++inline HibernateStage selectHibernateStage(uint16_t vbat_mv, bool external_powered = false) {
++  if (external_powered || vbat_mv >= 3250U) {
++    return HibernateStage::WAKE_AND_REBOOT;
++  }
++  if (vbat_mv >= 3050U) {
++    return HibernateStage::SYSTEMON_BANDGAP_POLL;
++  }
++  return HibernateStage::DEEP_SYSTEMOFF_LPCOMP;
++}
++
++// S2-F3 & S2-F7: Non-zeroing, self-seeding noise floor estimator for high-gain 6.5 dBi antennas
++class NoiseFloorTracker {
++  int16_t _noise_floor = 0;
++  uint16_t _num_samples = 0;
++  int32_t _sample_sum = 0;
++
++public:
++  static constexpr uint16_t kTargetSamples = 64;
++  static constexpr uint16_t kSeedSamples = 8;
++  static constexpr int16_t kGateMarginDb = 14;
++  static constexpr int16_t kMaxValidNoiseDbm = -50;
++
++  void startCalibrationWindow() {
++    // S2-F3: Never zero _noise_floor during calibration!
++    _num_samples = 0;
++    _sample_sum = 0;
++  }
++
++  void addSample(int rssi_dbm) {
++    if (_num_samples >= kTargetSamples || rssi_dbm >= kMaxValidNoiseDbm) {
++      return;
++    }
++    // S2-F7: Accept kSeedSamples un-gated samples first so an artificially low prior floor (-120 dBm)
++    // cannot permanently reject true urban ambient noise (-102 dBm on a 6.5 dBi omni antenna).
++    if (_num_samples >= kSeedSamples) {
++      int running_mean = _sample_sum / static_cast<int32_t>(_num_samples);
++      if (rssi_dbm >= (running_mean + kGateMarginDb)) {
++        return;
++      }
++    }
++    _num_samples++;
++    _sample_sum += rssi_dbm;
++    if (_num_samples >= kTargetSamples) {
++      _noise_floor = static_cast<int16_t>(_sample_sum / static_cast<int32_t>(kTargetSamples));
++      if (_noise_floor < -120) {
++        _noise_floor = -120;
++      }
++      _sample_sum = 0;
++    }
++  }
++
++  int16_t noiseFloor() const { return _noise_floor; }
++};
++
++// S3-F3: SX1262 false-preamble latch watchdog for high-gain omni antennas
++class PreambleTimeoutTracker {
++  uint32_t _activity_at = 0;
++  bool _header_seen = false;
++
++public:
++  static constexpr uint32_t IRQ_RX_DONE = 0x0002;
++  static constexpr uint32_t IRQ_PREAMBLE_DETECTED = 0x0004;
++  static constexpr uint32_t IRQ_HEADER_VALID = 0x0010;
++
++  bool evaluateIrq(
++      uint32_t irq,
++      bool has_rx_done,
++      bool polled_board,
++      uint32_t now_ms,
++      uint32_t preamble_ms,
++      uint32_t max_payload_ms,
++      bool& should_clear_irq) {
++    should_clear_irq = false;
++    if (polled_board) {
++      return (irq & (IRQ_PREAMBLE_DETECTED | IRQ_HEADER_VALID)) != 0;
++    }
++    if (has_rx_done || (irq & IRQ_RX_DONE) != 0) {
++      _activity_at = 0;
++      _header_seen = false;
++      return false;
++    }
++    const bool has_preamble = (irq & IRQ_PREAMBLE_DETECTED) != 0;
++    const bool has_header = (irq & IRQ_HEADER_VALID) != 0;
++    if (!has_preamble && !has_header) {
++      _activity_at = 0;
++      _header_seen = false;
++      return false;
++    }
++    if (_activity_at == 0) {
++      _activity_at = (now_ms == 0) ? 1U : now_ms;
++      _header_seen = has_header;
++      return true;
++    }
++    if (has_header && !_header_seen) {
++      _header_seen = true;
++    }
++    const uint32_t timeout_ms = _header_seen ? (preamble_ms + max_payload_ms) : preamble_ms;
++    if ((uint32_t)(now_ms - _activity_at) > timeout_ms) {
++      should_clear_irq = true;
++      _activity_at = 0;
++      _header_seen = false;
++      return false;
++    }
++    return true;
++  }
++};
++
++}  // namespace sensecap
+diff --git a/variants/sensecap_solar/platformio.ini b/variants/sensecap_solar/platformio.ini
+index a2a9c85..39a2ab8 100644
+--- a/variants/sensecap_solar/platformio.ini
++++ b/variants/sensecap_solar/platformio.ini
+@@ -9,6 +9,8 @@ build_flags = ${nrf52_base.build_flags}
+   -I variants/sensecap_solar
+   -I src/helpers/nrf52
+   -D NRF52_PLATFORM=1
++  -D NRF52_POWER_MANAGEMENT=1
++  -D CONFIG_NFCT_PINS_AS_GPIOS=1
+   -D USE_SX1262
+   -D RADIO_CLASS=CustomSX1262
+   -D WRAPPER_CLASS=CustomSX1262Wrapper
+@@ -19,13 +21,16 @@ build_flags = ${nrf52_base.build_flags}
+   -D P_LORA_NSS=4
+   -D PIN_USER_BTN=PIN_BUTTON1
+   -D LORA_TX_POWER=22
++  -D LORA_CR=8
+   -D SX126X_RXEN=5
+   -D SX126X_TXEN=RADIOLIB_NC
+   -D SX126X_DIO2_AS_RF_SWITCH=1
+   -D SX126X_DIO3_TCXO_VOLTAGE=1.8
+   -D SX126X_CURRENT_LIMIT=140
+   -D SX126X_RX_BOOSTED_GAIN=1
++  -D SX126X_REGISTER_PATCH=1
+   -D ENV_INCLUDE_GPS=1
++  -D GPS_L76K=1
+ build_src_filter = ${nrf52_base.build_src_filter}
+   +<helpers/*.cpp>
+   +<helpers/sensors>
+@@ -44,7 +49,11 @@ build_flags =
+   -D ADVERT_LAT=0.0
+   -D ADVERT_LON=0.0
+   -D ADMIN_PASSWORD='"password"'
+-  -D MAX_NEIGHBOURS=50
++  -D MAX_NEIGHBOURS=128
++  -D MAX_PACKET_HASHES=512
++  -D PACKET_POOL_SIZE=64
++  -D MAX_REGION_ENTRIES=64
++  -D MAX_TKS_ENTRIES=64
+ ;  -D MESH_PACKET_LOGGING=1
+ ;  -D MESH_DEBUG=1
+ build_src_filter = ${SenseCap_Solar.build_src_filter}
+@@ -95,7 +104,6 @@ build_flags =
+ ;  -D MESH_PACKET_LOGGING=1
+ ;  -D MESH_DEBUG=1
+ build_src_filter = ${SenseCap_Solar.build_src_filter}
+-  +<helpers/nrf52/SerialBLEInterface.cpp>
+   +<../examples/companion_radio/*.cpp>
+ lib_deps =
+   ${SenseCap_Solar.lib_deps}
+diff --git a/variants/sensecap_solar/target.cpp b/variants/sensecap_solar/target.cpp
+index 4664151..60414ce 100644
+--- a/variants/sensecap_solar/target.cpp
++++ b/variants/sensecap_solar/target.cpp
+@@ -6,7 +6,14 @@
+ #endif
+ SenseCapSolarBoard board;
+ 
+-RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY, SPI);
++// S2-F9: Request 8 MHz SPI clock (4x faster than RadioLib's 2 MHz default while avoiding nRF52840 SPIM3 Errata 198 at 16/32 MHz)
++RADIO_CLASS radio = new Module(
++    P_LORA_NSS,
++    P_LORA_DIO_1,
++    P_LORA_RESET,
++    P_LORA_BUSY,
++    SPI,
++    SPISettings(8000000, MSBFIRST, SPI_MODE0));
+ 
+ WRAPPER_CLASS radio_driver(radio, board);
+ 
+@@ -20,7 +27,9 @@ EnvironmentSensorManager sensors = EnvironmentSensorManager();
+ #endif
+ 
+ bool radio_init() {
+-    rtc_clock.begin(Wire);
++    if (digitalRead(PIN_WIRE_SDA) == HIGH && digitalRead(PIN_WIRE_SCL) == HIGH) {
++        rtc_clock.begin(Wire);
++    }
+ 
+     return radio.std_init(&SPI);
+ }
+@@ -29,4 +38,3 @@ mesh::LocalIdentity radio_new_identity() {
+   RadioNoiseListener rng(radio);
+   return mesh::LocalIdentity(&rng);  // create new random identity
+ }
+-
+diff --git a/variants/sensecap_solar/target.h b/variants/sensecap_solar/target.h
+index a1c01f1..049eb93 100644
+--- a/variants/sensecap_solar/target.h
++++ b/variants/sensecap_solar/target.h
+@@ -10,6 +10,7 @@
+ #include <helpers/sensors/EnvironmentSensorManager.h>
+ 
+ extern SenseCapSolarBoard board;
++extern RADIO_CLASS radio;
+ extern WRAPPER_CLASS radio_driver;
+ extern AutoDiscoverRTCClock rtc_clock;
+ extern EnvironmentSensorManager sensors;
+diff --git a/variants/sensecap_solar/variant.cpp b/variants/sensecap_solar/variant.cpp
+index 43f1d80..77a3200 100644
+--- a/variants/sensecap_solar/variant.cpp
++++ b/variants/sensecap_solar/variant.cpp
+@@ -1,4 +1,5 @@
+ #include "variant.h"
++#include "Arduino.h"
+ #include "wiring_constants.h"
+ #include "wiring_digital.h"
+ #include "nrf.h"
+@@ -29,16 +30,15 @@ const uint32_t g_ADigitalPinMap[] = {
+     10, // D15 P0.10 NFC2/GROVE_D0
+ 
+     // D16 - Power management
+-    // 31, // D16 P0.31 VBAT_ADC (Battery voltage)
+     31, // D16 P0.31 VBAT_ADC (Battery voltage)
+-    // D17 - GNSS control
+-    35, // D17 P1.03 GNSS_RESET
+ 
++    // D17-D20 - GNSS & Power control
++    35, // D17 P1.03 GNSS_RESET
+     37, // D18 P1.05 GNSS_ENABLE
+     14, // D19 P0.14 BAT_READ
+     39, // D20 P1.07 USER_BUTTON
+ 
+-    //
++    // D21-D26 - P25Q16H QSPI Flash
+     21, // D21 P0.21 (QSPI_SCK)
+     25, // D22 P0.25 (QSPI_CSN)
+     20, // D23 P0.20 (QSPI_SIO_0 DI)
+@@ -47,16 +47,94 @@ const uint32_t g_ADigitalPinMap[] = {
+     23, // D26 P0.23 (QSPI_SIO_3 HOLD)
+ };
+ 
++static_assert(sizeof(g_ADigitalPinMap) / sizeof(g_ADigitalPinMap[0]) == PINS_COUNT,
++              "g_ADigitalPinMap size mismatch with PINS_COUNT");
++
++static void qspiShiftOutByte(uint8_t byte_val) {
++    for (int8_t bit = 7; bit >= 0; bit--) {
++        digitalWrite(PIN_QSPI_SCK, LOW);
++        digitalWrite(PIN_QSPI_IO0, (byte_val & (1U << bit)) ? HIGH : LOW);
++        digitalWrite(PIN_QSPI_SCK, HIGH);
++    }
++    digitalWrite(PIN_QSPI_SCK, LOW);
++}
++
++// S1-F5: Place onboard P25Q16H 2MB QSPI NOR Flash into Deep Power-Down (0xB9, <1 uA)
++// using bit-banged SPI Mode 0 to avoid nRF52840 QSPI peripheral Errata 122 (+1.2 mA leak).
++void sensecapQspiFlashDeepPowerDown() {
++    pinMode(PIN_QSPI_CS, OUTPUT);
++    pinMode(PIN_QSPI_SCK, OUTPUT);
++    pinMode(PIN_QSPI_IO0, OUTPUT);
++    pinMode(PIN_QSPI_IO1, INPUT_PULLUP);
++    pinMode(PIN_QSPI_IO2, OUTPUT);
++    pinMode(PIN_QSPI_IO3, OUTPUT);
++
++    digitalWrite(PIN_QSPI_CS, HIGH);
++    digitalWrite(PIN_QSPI_SCK, LOW);
++    digitalWrite(PIN_QSPI_IO2, HIGH); // WP# deasserted
++    digitalWrite(PIN_QSPI_IO3, HIGH); // HOLD# deasserted
++
++    // 1. Issue Release from Deep Power-Down (0xAB) in case flash is in an unknown state
++    digitalWrite(PIN_QSPI_CS, LOW);
++    qspiShiftOutByte(0xAB);
++    digitalWrite(PIN_QSPI_CS, HIGH);
++    delayMicroseconds(30);
++
++    // 2. Issue Deep Power-Down command (0xB9) -> reduces standby from ~35 uA to < 1 uA
++    digitalWrite(PIN_QSPI_CS, LOW);
++    qspiShiftOutByte(0xB9);
++    digitalWrite(PIN_QSPI_CS, HIGH);
++    delayMicroseconds(10);
++
++    // Disconnect CMOS input buffers on all non-CS QSPI pins (P0.20..P0.24) to eliminate
++    // floating-input shoot-through current while keeping CS# (P0.25) driven HIGH.
++    const uint32_t kDisconnectPinCnf =
++        (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos) |
++        (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
++        (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos);
++    NRF_P0->PIN_CNF[20] = kDisconnectPinCnf; // QSPI_SIO_0 (DI)
++    NRF_P0->PIN_CNF[21] = kDisconnectPinCnf; // QSPI_SCK
++    NRF_P0->PIN_CNF[22] = kDisconnectPinCnf; // QSPI_SIO_2 (WP#)
++    NRF_P0->PIN_CNF[23] = kDisconnectPinCnf; // QSPI_SIO_3 (HOLD#)
++    NRF_P0->PIN_CNF[24] = kDisconnectPinCnf; // QSPI_SIO_1 (DO)
++}
++
+ void initVariant() {
++    // S4-F4: Ensure P0.09 (Grove SDA) and P0.10 (Grove SCL) are decoupled from the NFCT peripheral
++    if ((NRF_UICR->NFCPINS & UICR_NFCPINS_PROTECT_Msk) ==
++        (UICR_NFCPINS_PROTECT_NFC << UICR_NFCPINS_PROTECT_Pos)) {
++        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
++        while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
++        NRF_UICR->NFCPINS &= ~UICR_NFCPINS_PROTECT_Msk;
++        while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
++        NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
++        while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
++        NVIC_SystemReset();
++    }
++
++    // S4-F1 & S4-F3: Power off XIAO L76K and disconnect CMOS input buffers on all GNSS I/O lines
+     pinMode(GPS_EN, OUTPUT);
+     digitalWrite(GPS_EN, LOW);
++    const uint32_t kDisconnectPinCnf =
++        (GPIO_PIN_CNF_DIR_Input << GPIO_PIN_CNF_DIR_Pos) |
++        (GPIO_PIN_CNF_INPUT_Disconnect << GPIO_PIN_CNF_INPUT_Pos) |
++        (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos);
++    NRF_P0->PIN_CNF[2]  = kDisconnectPinCnf; // P0.02 GNSS_WAKEUP
++    NRF_P1->PIN_CNF[3]  = kDisconnectPinCnf; // P1.03 GNSS_RESET
++    NRF_P1->PIN_CNF[11] = kDisconnectPinCnf; // P1.11 GNSS_TX
++    NRF_P1->PIN_CNF[12] = kDisconnectPinCnf; // P1.12 GNSS_RX
+ 
++    // S1-F4: Keep battery divider disabled (HIGH) when idle; enabled only during SAADC read or LPCOMP sleep
+     pinMode(BATTERY_PIN, INPUT);
+     pinMode(VBAT_ENABLE, OUTPUT);
+-    digitalWrite(VBAT_ENABLE, LOW);
++    digitalWrite(VBAT_ENABLE, HIGH);
+ 
+-    pinMode(PIN_QSPI_CS, OUTPUT);
+-    digitalWrite(PIN_QSPI_CS, HIGH);
++    // S4-F5: Configure both user buttons with internal pull-ups to prevent floating input leakage
++    pinMode(PIN_BUTTON1, INPUT_PULLUP);
++    pinMode(PIN_BUTTON2, INPUT_PULLUP);
++
++    // S1-F5: Put P25Q16H QSPI flash into Deep Power-Down (<1 uA)
++    sensecapQspiFlashDeepPowerDown();
+ 
+     pinMode(LED_WHITE, OUTPUT);
+     digitalWrite(LED_WHITE, LOW);
+diff --git a/variants/sensecap_solar/variant.h b/variants/sensecap_solar/variant.h
+index ef87c7e..76eac4a 100644
+--- a/variants/sensecap_solar/variant.h
++++ b/variants/sensecap_solar/variant.h
+@@ -11,9 +11,20 @@
+  *----------------------------------------------------------------------------*/
+ 
+ #include "WVariant.h"
++#ifdef __cplusplus
++#include "SenseCapSolarSeams.h"
++#endif
++
++#ifndef MAX_PACKET_HASHES
++#define MAX_PACKET_HASHES       (512)
++#endif
++#ifndef MAX_TKS_ENTRIES
++#define MAX_TKS_ENTRIES         (64)
++#endif
+ 
+-#define PINS_COUNT              (33)
+-#define NUM_DIGITAL_PINS        (33)
++// S1-F7: Match exact g_ADigitalPinMap[] length (27 entries: D0..D26)
++#define PINS_COUNT              (27)
++#define NUM_DIGITAL_PINS        (27)
+ #define NUM_ANALOG_INPUTS       (8)
+ #define NUM_ANALOG_OUTPUTS      (0)
+ 
+@@ -37,15 +48,21 @@
+ #define VBAT_ENABLE             (19)    // Output LOW to enable reading of the BAT voltage.
+ 
+ // Analog pins
+-#define BATTERY_PIN             (16)    // Read the BAT voltage.
++// S1-F13: Exact 1.00 MOhm / 510 kOhm voltage divider ratio = 1510 / 510 = 2.9607843f
++// Combined with AREF_VOLTAGE = 3.0V (0.6V internal bandgap * 5x gain = 3000 mV full scale)
++#define BATTERY_PIN             (16)    // Read the BAT voltage (P0.31 / AIN7).
+ #define AREF_VOLTAGE            (3.0F)
+-#define ADC_MULTIPLIER          (3.0F) // 1M, 512k divider bridge
++#define ADC_MULTIPLIER          (1510.0F / 510.0F)
+ #define ADC_RESOLUTION          (12)
+ 
+-// nRF52 power management settings
+-#define PWRMGT_VOLTAGE_BOOTLOCK (3300) // Won't boot below this voltage (mV)
+-#define PWRMGT_LPCOMP_AIN       (7)    // AIN7 = P0.31 = BATTERY_PIN
+-#define PWRMGT_LPCOMP_REFSEL    (2)    // 3/8 VDD (~3.38-3.71V)
++// nRF52 power management & Sub-Zero winter battery settings
++// S1-F11 & S1-F12: Lower bootlock to 3100 mV so Stage-1 Sub-Zero Hochnebel hibernate
++// wake at 3250 mV (~12% SoC) is never trapped in a boot-protection loop.
++#define PWRMGT_VOLTAGE_CRITICAL (3050)  // Deep SYSTEMOFF threshold (<0C compensated)
++#define PWRMGT_VOLTAGE_BOOTLOCK (3100)  // Won't cold-boot below this voltage (mV)
++#define PWRMGT_VOLTAGE_RECOVERY (3250)  // Stage-1 SYSTEMON RTC SAADC wake threshold (mV)
++#define PWRMGT_LPCOMP_AIN       (7)     // AIN7 = P0.31 = BATTERY_PIN
++#define PWRMGT_LPCOMP_REFSEL    (2)     // 3/8 VDD (Stage-2 deep SYSTEMOFF hardware fallback)
+ 
+ // Serial interfaces
+ #define PIN_SERIAL1_RX          (7)
+@@ -59,9 +76,9 @@
+ #define PIN_SPI_SCK             (8)
+ 
+ // Lora SPI is on SPI0
+-#define  P_LORA_SCLK            PIN_SPI_SCK
+-#define  P_LORA_MISO            PIN_SPI_MISO
+-#define  P_LORA_MOSI            PIN_SPI_MOSI
++#define P_LORA_SCLK             PIN_SPI_SCK
++#define P_LORA_MISO             PIN_SPI_MISO
++#define P_LORA_MOSI             PIN_SPI_MOSI
+ 
+ // Wire Interfaces
+ #define WIRE_INTERFACES_COUNT   (1)
+@@ -69,15 +86,21 @@
+ #define PIN_WIRE_SDA            (14)
+ #define PIN_WIRE_SCL            (15)
+ 
+-// GPS L76KB
++// GPS XIAO L76K
+ #define GPS_BAUDRATE            9600
++#define GPS_BAUD_RATE           GPS_BAUDRATE
+ #define GPS_THREAD_INTERVAL     50
+ #define PIN_GPS_TX              PIN_SERIAL1_RX
+ #define PIN_GPS_RX              PIN_SERIAL1_TX
+-#define PIN_GPS_STANDBY         (0)
+-#define GPS_EN                  (18)
+-
+-// QSPI Pins
++#define PIN_GPS_STANDBY         (0)     // D0 = P0.02 (GNSS_WAKEUP)
++#define PIN_GPS_RESET           (17)    // D17 = P1.03 (GNSS_RESET)
++#define GPS_RESET               (-1)    // Managed in board/sensor init to prevent 3.3V back-powering when GPS_EN is LOW
++#define PIN_GPS_EN              (18)    // D18 = P1.05 (GNSS_ENABLE)
++#define GPS_EN                  PIN_GPS_EN
++#define PIN_GPS_EN_ACTIVE       HIGH
++#define GPS_EN_ACTIVE           HIGH
++
++// QSPI Pins (Onboard P25Q16H 2MB NOR Flash)
+ #define PIN_QSPI_SCK            (21)
+ #define PIN_QSPI_CS             (22)
+ #define PIN_QSPI_IO0            (23)
+@@ -85,7 +108,15 @@
+ #define PIN_QSPI_IO2            (25)
+ #define PIN_QSPI_IO3            (26)
+ 
+-#define EXTERNAL_FLASH_DEVICES P25Q16H
++#define EXTERNAL_FLASH_DEVICES  P25Q16H
+ #define EXTERNAL_FLASH_USE_QSPI
+ 
++#ifdef __cplusplus
++extern "C" {
++#endif
++void sensecapQspiFlashDeepPowerDown(void);
++#ifdef __cplusplus
++}
++#endif
++
+ #endif
