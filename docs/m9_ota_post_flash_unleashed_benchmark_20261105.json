@@ -1,0 +1,83 @@
+{
+  "timestamp_cet": "2026-11-05T12:43:24+01:00",
+  "timestamp_epoch": 1793879004,
+  "m9_node": {
+    "name": "MeshCore Companion",
+    "board": "Elecrow ThinkNode M9",
+    "firmware": "v1.18.0.1-touch (build 7 Jun 2026, proto v27)",
+    "pubkey": "<redacted-companion-pubkey>",
+    "battery_mv": 4346,
+    "radio_config": "869.618 MHz | BW 62.5 kHz | SF8 | CR8 (4/8)",
+    "tx_power_dbm": 22,
+    "coordinates": [0.000000, 0.000000]
+  },
+  "rooftop_repeater_unleashed_ota": {
+    "name": "MeshCore-Repeater",
+    "pubkey": "<redacted-repeater-pubkey>",
+    "power_source": "battery (ext=0, usb=0x0)",
+    "battery_ema_mv": 4068,
+    "battery_raw_mv": 4067,
+    "battery_min16_mv": 4064,
+    "battery_max16_mv": 4073,
+    "saadc_16burst_us": 5859,
+    "boot_voltage_mv": 4120,
+    "mcu_temp_c": 16.75,
+    "last_cal_temp_c": 25.8,
+    "critical_cutoff_mv": 3150,
+    "uptime_s": 1336,
+    "last_snr_db": 15.0,
+    "last_rssi_dbm": -59,
+    "noise_floor_dbm": -120,
+    "inst_rssi_quiet_dbm": -127.5,
+    "rx_total": 62,
+    "rx_flood": 37,
+    "rx_direct": 25,
+    "tx_total": 62,
+    "tx_flood": 37,
+    "tx_direct": 25,
+    "tx_airtime_s": 31,
+    "rx_airtime_s": 25,
+    "dups_direct": 0,
+    "dups_flood": 0,
+    "tx_errs": 0,
+    "rx_errs": 2,
+    "rx_error_rate_pct": 3.125,
+    "silicon": {
+      "part": "52840",
+      "var": "AAD0",
+      "id": "<redacted-device-id>",
+      "dcdc": 1,
+      "nfc": "0xFFFFFFFE",
+      "hf": "0x10000",
+      "lf": "0x10001",
+      "wdt": 1,
+      "usb": "0x0"
+    },
+    "rfdiag": {
+      "rxg": "0x96",
+      "ocp": "0x38",
+      "clmp": "0xFE",
+      "evt": "0x02",
+      "xta": "0x05",
+      "err": "0x0000",
+      "irq": "0x0000",
+      "rssi": -118.0,
+      "qspi": "0x2",
+      "gps": "0x2"
+    }
+  },
+  "trace_benchmark_5x": {
+    "delivered": "5/5 (100%)",
+    "mean_rtt_ms": 863,
+    "runs": [
+      {"run": 1, "rtt_ms": 1131, "snr_m9_to_p1_db": 12.75, "snr_p1_to_m9_db": 14.00},
+      {"run": 2, "rtt_ms": 708,  "snr_m9_to_p1_db": 12.75, "snr_p1_to_m9_db": 14.00},
+      {"run": 3, "rtt_ms": 853,  "snr_m9_to_p1_db": 12.75, "snr_p1_to_m9_db": 15.00},
+      {"run": 4, "rtt_ms": 737,  "snr_m9_to_p1_db": 12.25, "snr_p1_to_m9_db": 14.25},
+      {"run": 5, "rtt_ms": 887,  "snr_m9_to_p1_db": 15.00, "snr_p1_to_m9_db": 14.75}
+    ],
+    "mean_outbound_snr_db": 13.10,
+    "mean_return_snr_db": 14.40,
+    "regional_relays_verified_over_air": "33/34 (97.1%)"
+  }
+}

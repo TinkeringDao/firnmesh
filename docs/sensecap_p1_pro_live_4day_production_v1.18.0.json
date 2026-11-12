@@ -1,0 +1,71 @@
+{
+  "captured_at_utc": "2026-11-05T10:41:05Z",
+  "port": "/dev/cu.usbmodem1101",
+  "firmware": "v1.18.0-81dbae5 (Build: 15-Oct-2026)",
+  "board": "Seeed SenseCap Solar",
+  "role": "repeater",
+  "node_name": "MeshCore-Repeater",
+  "public_key": "<redacted-repeater-pubkey>",
+  "radio_config": {
+    "freq_mhz": 869.6179809,
+    "bw_khz": 62.5,
+    "sf": 8,
+    "cr": 8,
+    "tx_dbm": 22,
+    "rxgain": "on",
+    "agc_reset_interval_sec": 4,
+    "cad": "on"
+  },
+  "repeater_config": {
+    "repeat": "on",
+    "loop_detect": "minimal",
+    "multi_acks": 1,
+    "txdelay": 0.5,
+    "direct_txdelay": 0.1999999,
+    "advert_interval_min": 120,
+    "flood_advert_interval_hr": 12,
+    "lat": 0.000000,
+    "lon": 0.000000,
+    "gps_status": "off",
+    "gps_advert": "prefs",
+    "owner_info": "MeshCore-Repeater | sub-zero field site | P1-Pro + MikroTik 6.5dBi",
+    "clock_utc": "10:41 - 5/11/2026 UTC",
+    "region_home": "eu-metro",
+    "regions": [
+      "* F",
+      "eu-region F",
+      "eu-sub1 F",
+      "eu-metro^ F"
+    ],
+    "acl": [
+      "03 <redacted-companion-pubkey>"
+    ]
+  },
+  "telemetry_4day_uptime": {
+    "pwrmgt": "Unknown command",
+    "stats_core": {
+      "battery_mv": 4163,
+      "uptime_secs": 343102,
+      "uptime_hours": 95.31,
+      "errors": 0,
+      "queue_len": 0
+    },
+    "stats_radio": {
+      "noise_floor": 0,
+      "last_rssi": -127,
+      "last_snr": -13.0,
+      "tx_air_secs": 1211,
+      "rx_air_secs": 1123
+    },
+    "stats_packets": {
+      "recv": 2016,
+      "sent": 1879,
+      "flood_tx": 1305,
+      "direct_tx": 574,
+      "flood_rx": 1337,
+      "direct_rx": 672,
+      "recv_errors": 2182
+    },
+    "neighbors": "-none-"
+  }
+}

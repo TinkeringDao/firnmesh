@@ -1,0 +1,1147 @@
+{
+  "factory_v1_18_0": {
+    "uf2File": "SenseCap_Solar_repeater-v1.18.0-81dbae5.uf2",
+    "uf2SizeBytes": 730624,
+    "uf2Sha256": "af0fc5639e9dfde78261ff2c4c07ab31dfedef6981deabbc77698017e44b37b5",
+    "hasValidUf2Header": true,
+    "complete": true,
+    "limitations": [],
+    "metadata": {
+      "kind": "uf2",
+      "block_count": 1427,
+      "trailing_bytes": 0,
+      "invalid_block_count": 0,
+      "flash_block_count": 1427,
+      "not_main_flash_block_count": 0,
+      "file_container_block_count": 0,
+      "md5_block_count": 0,
+      "extension_tag_block_count": 0,
+      "family_count": 1,
+      "family_name_registry": "microsoft/uf2 cf3bd7f9 utils/uf2families.json",
+      "numbering_group_count": 1,
+      "missing_block_count": 0,
+      "ambiguous_numbering_group_count": 0,
+      "repeated_block_count": 0,
+      "out_of_order_block_count": 0,
+      "block_number_out_of_range_count": 0,
+      "region_count": 1,
+      "data_bytes": 365312,
+      "duplicate_bytes": 0
+    },
+    "flashBudget": {
+      "softdevice_s140_range": "0x00000000 - 0x00025FFF (152 KB)",
+      "app_flash_start": "0x00026000",
+      "app_flash_end_used": "0x000802ff",
+      "app_payload_bytes": 365312,
+      "app_payload_kb": 356.75,
+      "v7_ld_max_bytes": 811008,
+      "v7_ld_utilization_pct": 45.04,
+      "v7_ld_internalfs_range": "0x000ED000 - 0x000F3FFF (28 KB)",
+      "extrafs_ld_max_bytes": 708608,
+      "extrafs_ld_utilization_pct": 51.55,
+      "extrafs_ld_internalfs_range": "0x000D4000 - 0x000F3FFF (128 KB)",
+      "bootloader_range": "0x000F4000 - 0x000FFFFF (48 KB)"
+    },
+    "regions": [
+      {
+        "index": 0,
+        "familyIdHex": "0xada52840",
+        "familyName": "NRF52840",
+        "startAddressHex": "0x00027000",
+        "endAddressHex": "0x000802ff",
+        "sizeBytes": 365312,
+        "blockCount": 1427,
+        "firstFileBlock": 0,
+        "lastFileBlock": 1426,
+        "sha256": "fd7142cdcc4a19a35f9cb950c6b2b7dde50b36ca65ae110c15813aabd484a974",
+        "extractedFile": "v1.18.0_81dbae5_region0_0x00027000.bin",
+        "cortexM4VectorTable": {
+          "vectorTableBase": "0x00027000",
+          "defaultStubHandler": "0x0005fe13",
+          "coreVectors": {
+            "Initial_SP": "0x20040000",
+            "Reset_Handler": "0x0005fdc1",
+            "NMI_Handler": "0x0005fe01",
+            "HardFault_Handler": "0x0005fe03",
+            "MemManage_Handler": "0x0005fe05",
+            "BusFault_Handler": "0x0005fe07",
+            "UsageFault_Handler": "0x0005fe09",
+            "Reserved_7": "0x00000000",
+            "Reserved_8": "0x00000000",
+            "Reserved_9": "0x00000000",
+            "Reserved_10": "0x00000000",
+            "SVC_Handler": "0x0005fca5",
+            "DebugMon_Handler": "0x0005fe0d",
+            "Reserved_13": "0x00000000",
+            "PendSV_Handler": "0x0005fcc5",
+            "SysTick_Handler": "0x0005fe11"
+          },
+          "activeIrqHandlers": [
+            {
+              "irq": 0,
+              "name": "POWER_CLOCK",
+              "handler": "0x0005fff1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 2,
+              "name": "UARTE0_UART0",
+              "handler": "0x0005d4a1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 3,
+              "name": "SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0",
+              "handler": "0x0003ccbd",
+              "isNonDefault": true
+            },
+            {
+              "irq": 6,
+              "name": "GPIOTE",
+              "handler": "0x0005d831",
+              "isNonDefault": true
+            },
+            {
+              "irq": 17,
+              "name": "RTC1",
+              "handler": "0x0005fa01",
+              "isNonDefault": true
+            },
+            {
+              "irq": 22,
+              "name": "SWI2_EGU2",
+              "handler": "0x0005b18d",
+              "isNonDefault": true
+            },
+            {
+              "irq": 35,
+              "name": "SPIM2_SPIS2_SPI2",
+              "handler": "0x000605c1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 39,
+              "name": "USBD",
+              "handler": "0x00027e21",
+              "isNonDefault": true
+            },
+            {
+              "irq": 47,
+              "name": "SPIM3",
+              "handler": "0x00060641",
+              "isNonDefault": true
+            }
+          ],
+          "allIrqVectors": [
+            {
+              "irq": 0,
+              "name": "POWER_CLOCK",
+              "handler": "0x0005fff1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 1,
+              "name": "RADIO",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 2,
+              "name": "UARTE0_UART0",
+              "handler": "0x0005d4a1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 3,
+              "name": "SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0",
+              "handler": "0x0003ccbd",
+              "isNonDefault": true
+            },
+            {
+              "irq": 4,
+              "name": "SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 5,
+              "name": "NFCT",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 6,
+              "name": "GPIOTE",
+              "handler": "0x0005d831",
+              "isNonDefault": true
+            },
+            {
+              "irq": 7,
+              "name": "SAADC",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 8,
+              "name": "TIMER0",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 9,
+              "name": "TIMER1",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 10,
+              "name": "TIMER2",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 11,
+              "name": "RTC0",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 12,
+              "name": "TEMP",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 13,
+              "name": "RNG",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 14,
+              "name": "ECB",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 15,
+              "name": "CCM_AAR",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 16,
+              "name": "WDT",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 17,
+              "name": "RTC1",
+              "handler": "0x0005fa01",
+              "isNonDefault": true
+            },
+            {
+              "irq": 18,
+              "name": "QDEC",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 19,
+              "name": "COMP_LPCOMP",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 20,
+              "name": "SWI0_EGU0",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 21,
+              "name": "SWI1_EGU1",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 22,
+              "name": "SWI2_EGU2",
+              "handler": "0x0005b18d",
+              "isNonDefault": true
+            },
+            {
+              "irq": 23,
+              "name": "SWI3_EGU3",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 24,
+              "name": "SWI4_EGU4",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 25,
+              "name": "SWI5_EGU5",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 26,
+              "name": "TIMER3",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 27,
+              "name": "TIMER4",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 28,
+              "name": "PWM0",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 29,
+              "name": "PDM",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 30,
+              "name": "ACL_NVMC",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 31,
+              "name": "PPI",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 32,
+              "name": "MWU",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 33,
+              "name": "PWM1",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 34,
+              "name": "PWM2",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 35,
+              "name": "SPIM2_SPIS2_SPI2",
+              "handler": "0x000605c1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 36,
+              "name": "RTC2",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 37,
+              "name": "I2S",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 38,
+              "name": "FPU",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 39,
+              "name": "USBD",
+              "handler": "0x00027e21",
+              "isNonDefault": true
+            },
+            {
+              "irq": 40,
+              "name": "UARTE1",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 41,
+              "name": "QSPI",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 42,
+              "name": "CRYPTOCELL",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 43,
+              "name": "RESERVED_43",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 44,
+              "name": "RESERVED_44",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 45,
+              "name": "PWM3",
+              "handler": "0x0005fe13",
+              "isNonDefault": false
+            },
+            {
+              "irq": 46,
+              "name": "RESERVED_46",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 47,
+              "name": "SPIM3",
+              "handler": "0x00060641",
+              "isNonDefault": true
+            }
+          ]
+        }
+      }
+    ],
+    "dfuZipAnalysis": {
+      "zipFile": "SenseCap_Solar_repeater-v1.18.0-81dbae5.zip",
+      "zipSizeBytes": 366055,
+      "zipSha256": "70cbe8d2bec086617d0a852acb992c7306a8b4e1435572b5e282eab5080eebff",
+      "manifest": {
+        "manifest": {
+          "application": {
+            "bin_file": "firmware.bin",
+            "dat_file": "firmware.dat",
+            "init_packet_data": {
+              "application_version": 4294967295,
+              "device_revision": 65535,
+              "device_type": 82,
+              "firmware_crc16": 51848,
+              "softdevice_req": [
+                291
+              ]
+            }
+          },
+          "dfu_version": 0.5
+        }
+      },
+      "initPacketDat": {
+        "device_type": "0x0052",
+        "device_rev": "0xffff",
+        "app_version": "0xffffffff",
+        "softdevice_count": 1,
+        "softdevice_req_fwid": "0x0123",
+        "crc16": "0xca88"
+      },
+      "firmwareBinSizeBytes": 365252,
+      "firmwareBinSha256": "9fe539e3c31c3e77761e95d3f5d2fa156693561367890cf2cee5b0c8648863d4",
+      "matchesUf2PayloadExactly": false
+    },
+    "binaryFeatureAudit": {
+      "has_pwrmgt_supported_str": false,
+      "has_pwrmgt_unsupported_str": false,
+      "has_pwrmgt_error_str": true,
+      "has_lpcomp_wake_str": false,
+      "has_pcas04_multi_gnss_cmd": false,
+      "has_sensecap_ota_str": true,
+      "has_manufacturer_str": true,
+      "has_default_advert_name": true,
+      "has_cc310_crypto": false
+    },
+    "mmioLiteralPoolRefs": {
+      "NRF_POWER (0x40000000)": 3,
+      "NRF_SAADC (0x40007000)": 1,
+      "NRF_TEMP (0x4000C000)": 2,
+      "NRF_WDT (0x40010000)": 1,
+      "NRF_LPCOMP (0x40013000)": 0,
+      "NRF_NVMC (0x4001E000)": 1,
+      "NRF_UICR (0x10001000)": 0,
+      "NRF_P0 (0x50000000)": 18,
+      "NRF_P1 (0x50000300)": 18,
+      "NRF_CRYPTOCELL (0x5002A000)": 1
+    },
+    "embeddedSourcePaths": [
+      "get path.hash.mode",
+      "set path.hash.mode ",
+      "/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/rand.c",
+      "/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/time/gmtime.c",
+      "/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/dtoa.c",
+      "/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/gdtoa-gethex.c",
+      "/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/mprec.c"
+    ],
+    "cliAndConfigStrings": [
+      "v1.18.0-81dbae5",
+      "repeater",
+      "{\"recv\":%u,\"sent\":%u,\"flood_tx\":%u,\"direct_tx\":%u,\"flood_rx\":%u,\"direct_rx\":%u,\"recv_errors\":%u}",
+      "fem_rxgain",
+      "f_txdelay",
+      "d_txdelay",
+      "agc_int",
+      "SenseCap_Solar Repeater",
+      "OK - loaded %d regions",
+      "discover.neighbors",
+      "Err - discover.neighbors has no options",
+      "Repeater ID: ",
+      "Seeed SenseCap Solar",
+      "ERROR: radio init failed: ",
+      "SENSECAP_SOLAR_OTA",
+      "flood.advert.interval ",
+      "advert.interval ",
+      "OK, reboot to apply! New pubkey: ",
+      "flood.max.unscoped ",
+      "flood.max.advert ",
+      "flood.max ",
+      "loop.detect ",
+      "OK - reboot to apply",
+      "flood.advert.interval",
+      "advert.interval",
+      "flood.max.advert",
+      "flood.max.unscoped",
+      "flood.max",
+      "loop.detect",
+      "bootloader.ver",
+      "pwrmgt.support",
+      "pwrmgt.source",
+      "pwrmgt.bootreason",
+      "pwrmgt.bootmv",
+      "region def",
+      "Err - unknown region",
+      "Err - region table full",
+      "OK - (flood allowed)",
+      "reboot",
+      "clkreboot",
+      "advert.zerohop",
+      "OK - zerohop advert sent",
+      "OK - Advert sent",
+      "neighbors",
+      "tempradio ",
+      "region",
+      "gps on",
+      "gps toggle not found",
+      "gps off",
+      "gps sync",
+      "gps provider not found",
+      "gps diag",
+      "gps setloc",
+      "gps advert",
+      "Can't find GPS",
+      "powersaving on",
+      "powersaving off",
+      "powersaving",
+      "stats-radio",
+      "get radio",
+      "set radio ",
+      "Error, invalid radio params",
+      "get cad",
+      "set cad ",
+      "get radio.rxgain",
+      "set radio.rxgain ",
+      "get agc.reset.interval",
+      "set agc.reset.interval ",
+      "get txdelay",
+      "set txdelay ",
+      "get direct.txdelay",
+      "set direct.txdelay ",
+      "/regions2",
+      "gps_interval",
+      "SX1261",
+      "UF2 Bootloader "
+    ]
+  },
+  "unleashed_p1_pro": {
+    "uf2File": "SenseCap_Solar_repeater_unleashed.uf2",
+    "uf2SizeBytes": 747520,
+    "uf2Sha256": "d479ea32760fc4429d6d39ad203a42b392e6ee7bc4ded7efe556f5c9ec594df4",
+    "hasValidUf2Header": true,
+    "complete": true,
+    "limitations": [],
+    "metadata": {
+      "kind": "uf2",
+      "block_count": 1460,
+      "trailing_bytes": 0,
+      "invalid_block_count": 0,
+      "flash_block_count": 1460,
+      "not_main_flash_block_count": 0,
+      "file_container_block_count": 0,
+      "md5_block_count": 0,
+      "extension_tag_block_count": 0,
+      "family_count": 1,
+      "family_name_registry": "microsoft/uf2 cf3bd7f9 utils/uf2families.json",
+      "numbering_group_count": 1,
+      "missing_block_count": 0,
+      "ambiguous_numbering_group_count": 0,
+      "repeated_block_count": 0,
+      "out_of_order_block_count": 0,
+      "block_number_out_of_range_count": 0,
+      "region_count": 1,
+      "data_bytes": 373760,
+      "duplicate_bytes": 0
+    },
+    "flashBudget": {
+      "softdevice_s140_range": "0x00000000 - 0x00025FFF (152 KB)",
+      "app_flash_start": "0x00026000",
+      "app_flash_end_used": "0x000823ff",
+      "app_payload_bytes": 373760,
+      "app_payload_kb": 365,
+      "v7_ld_max_bytes": 811008,
+      "v7_ld_utilization_pct": 46.09,
+      "v7_ld_internalfs_range": "0x000ED000 - 0x000F3FFF (28 KB)",
+      "extrafs_ld_max_bytes": 708608,
+      "extrafs_ld_utilization_pct": 52.75,
+      "extrafs_ld_internalfs_range": "0x000D4000 - 0x000F3FFF (128 KB)",
+      "bootloader_range": "0x000F4000 - 0x000FFFFF (48 KB)"
+    },
+    "regions": [
+      {
+        "index": 0,
+        "familyIdHex": "0xada52840",
+        "familyName": "NRF52840",
+        "startAddressHex": "0x00027000",
+        "endAddressHex": "0x000823ff",
+        "sizeBytes": 373760,
+        "blockCount": 1460,
+        "firstFileBlock": 0,
+        "lastFileBlock": 1459,
+        "sha256": "4f442f1cec0678de570e9985f907585e87cdccfc39ea14bf898488c98727e2d6",
+        "extractedFile": "unleashed_p1_pro_region0_0x00027000.bin",
+        "cortexM4VectorTable": {
+          "vectorTableBase": "0x00027000",
+          "defaultStubHandler": "0x00061d33",
+          "coreVectors": {
+            "Initial_SP": "0x20040000",
+            "Reset_Handler": "0x00061ce1",
+            "NMI_Handler": "0x00061d21",
+            "HardFault_Handler": "0x00061d23",
+            "MemManage_Handler": "0x00061d25",
+            "BusFault_Handler": "0x00061d27",
+            "UsageFault_Handler": "0x00061d29",
+            "Reserved_7": "0x00000000",
+            "Reserved_8": "0x00000000",
+            "Reserved_9": "0x00000000",
+            "Reserved_10": "0x00000000",
+            "SVC_Handler": "0x00061bc5",
+            "DebugMon_Handler": "0x00061d2d",
+            "Reserved_13": "0x00000000",
+            "PendSV_Handler": "0x00061be5",
+            "SysTick_Handler": "0x00061d31"
+          },
+          "activeIrqHandlers": [
+            {
+              "irq": 0,
+              "name": "POWER_CLOCK",
+              "handler": "0x00061f11",
+              "isNonDefault": true
+            },
+            {
+              "irq": 2,
+              "name": "UARTE0_UART0",
+              "handler": "0x0005f3c1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 3,
+              "name": "SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0",
+              "handler": "0x0003ebed",
+              "isNonDefault": true
+            },
+            {
+              "irq": 6,
+              "name": "GPIOTE",
+              "handler": "0x0005f751",
+              "isNonDefault": true
+            },
+            {
+              "irq": 17,
+              "name": "RTC1",
+              "handler": "0x00061921",
+              "isNonDefault": true
+            },
+            {
+              "irq": 22,
+              "name": "SWI2_EGU2",
+              "handler": "0x0005d0ad",
+              "isNonDefault": true
+            },
+            {
+              "irq": 35,
+              "name": "SPIM2_SPIS2_SPI2",
+              "handler": "0x000624e1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 39,
+              "name": "USBD",
+              "handler": "0x00027e21",
+              "isNonDefault": true
+            },
+            {
+              "irq": 47,
+              "name": "SPIM3",
+              "handler": "0x00062561",
+              "isNonDefault": true
+            }
+          ],
+          "allIrqVectors": [
+            {
+              "irq": 0,
+              "name": "POWER_CLOCK",
+              "handler": "0x00061f11",
+              "isNonDefault": true
+            },
+            {
+              "irq": 1,
+              "name": "RADIO",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 2,
+              "name": "UARTE0_UART0",
+              "handler": "0x0005f3c1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 3,
+              "name": "SPIM0_SPIS0_TWIM0_TWIS0_SPI0_TWI0",
+              "handler": "0x0003ebed",
+              "isNonDefault": true
+            },
+            {
+              "irq": 4,
+              "name": "SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 5,
+              "name": "NFCT",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 6,
+              "name": "GPIOTE",
+              "handler": "0x0005f751",
+              "isNonDefault": true
+            },
+            {
+              "irq": 7,
+              "name": "SAADC",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 8,
+              "name": "TIMER0",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 9,
+              "name": "TIMER1",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 10,
+              "name": "TIMER2",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 11,
+              "name": "RTC0",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 12,
+              "name": "TEMP",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 13,
+              "name": "RNG",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 14,
+              "name": "ECB",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 15,
+              "name": "CCM_AAR",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 16,
+              "name": "WDT",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 17,
+              "name": "RTC1",
+              "handler": "0x00061921",
+              "isNonDefault": true
+            },
+            {
+              "irq": 18,
+              "name": "QDEC",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 19,
+              "name": "COMP_LPCOMP",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 20,
+              "name": "SWI0_EGU0",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 21,
+              "name": "SWI1_EGU1",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 22,
+              "name": "SWI2_EGU2",
+              "handler": "0x0005d0ad",
+              "isNonDefault": true
+            },
+            {
+              "irq": 23,
+              "name": "SWI3_EGU3",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 24,
+              "name": "SWI4_EGU4",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 25,
+              "name": "SWI5_EGU5",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 26,
+              "name": "TIMER3",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 27,
+              "name": "TIMER4",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 28,
+              "name": "PWM0",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 29,
+              "name": "PDM",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 30,
+              "name": "ACL_NVMC",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 31,
+              "name": "PPI",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 32,
+              "name": "MWU",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 33,
+              "name": "PWM1",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 34,
+              "name": "PWM2",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 35,
+              "name": "SPIM2_SPIS2_SPI2",
+              "handler": "0x000624e1",
+              "isNonDefault": true
+            },
+            {
+              "irq": 36,
+              "name": "RTC2",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 37,
+              "name": "I2S",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 38,
+              "name": "FPU",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 39,
+              "name": "USBD",
+              "handler": "0x00027e21",
+              "isNonDefault": true
+            },
+            {
+              "irq": 40,
+              "name": "UARTE1",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 41,
+              "name": "QSPI",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 42,
+              "name": "CRYPTOCELL",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 43,
+              "name": "RESERVED_43",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 44,
+              "name": "RESERVED_44",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 45,
+              "name": "PWM3",
+              "handler": "0x00061d33",
+              "isNonDefault": false
+            },
+            {
+              "irq": 46,
+              "name": "RESERVED_46",
+              "handler": "0x00000000",
+              "isNonDefault": false
+            },
+            {
+              "irq": 47,
+              "name": "SPIM3",
+              "handler": "0x00062561",
+              "isNonDefault": true
+            }
+          ]
+        }
+      }
+    ],
+    "dfuZipAnalysis": {
+      "zipFile": "SenseCap_Solar_repeater_unleashed.zip",
+      "zipSizeBytes": 374547,
+      "zipSha256": "d4ef5f6cac81ddaa4078ea9e1059427b1c9f72473daa6112a42f5374238cff2e",
+      "manifest": {
+        "manifest": {
+          "application": {
+            "bin_file": "firmware.bin",
+            "dat_file": "firmware.dat",
+            "init_packet_data": {
+              "application_version": 4294967295,
+              "device_revision": 65535,
+              "device_type": 82,
+              "firmware_crc16": 42262,
+              "softdevice_req": [
+                291
+              ]
+            }
+          },
+          "dfu_version": 0.5
+        }
+      },
+      "initPacketDat": {
+        "device_type": "0x0052",
+        "device_rev": "0xffff",
+        "app_version": "0xffffffff",
+        "softdevice_count": 1,
+        "softdevice_req_fwid": "0x0123",
+        "crc16": "0xa516"
+      },
+      "firmwareBinSizeBytes": 373744,
+      "firmwareBinSha256": "544d67389ca081669d076594ff851dbbf8bfe8e2787d4157d0231e1d7b3226d2",
+      "matchesUf2PayloadExactly": false
+    },
+    "binaryFeatureAudit": {
+      "has_pwrmgt_supported_str": false,
+      "has_pwrmgt_unsupported_str": false,
+      "has_pwrmgt_error_str": false,
+      "has_lpcomp_wake_str": true,
+      "has_pcas04_multi_gnss_cmd": true,
+      "has_sensecap_ota_str": true,
+      "has_manufacturer_str": true,
+      "has_default_advert_name": true,
+      "has_cc310_crypto": false
+    },
+    "mmioLiteralPoolRefs": {
+      "NRF_POWER (0x40000000)": 3,
+      "NRF_SAADC (0x40007000)": 3,
+      "NRF_TEMP (0x4000C000)": 2,
+      "NRF_WDT (0x40010000)": 5,
+      "NRF_LPCOMP (0x40013000)": 1,
+      "NRF_NVMC (0x4001E000)": 3,
+      "NRF_UICR (0x10001000)": 0,
+      "NRF_P0 (0x50000000)": 22,
+      "NRF_P1 (0x50000300)": 22,
+      "NRF_CRYPTOCELL (0x5002A000)": 1
+    },
+    "embeddedSourcePaths": [
+      "get path.hash.mode",
+      "set path.hash.mode ",
+      "/Volumes/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/rand.c",
+      "/Volumes/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/time/gmtime.c",
+      "/Volumes/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/dtoa.c",
+      "/Volumes/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/gdtoa-gethex.c",
+      "/Volumes/data/jenkins/workspace/GNU-toolchain/arm-14/src/newlib-cygwin/newlib/libc/stdlib/mprec.c"
+    ],
+    "cliAndConfigStrings": [
+      "v1.18.0",
+      "repeater",
+      "{\"recv\":%u,\"sent\":%u,\"flood_tx\":%u,\"direct_tx\":%u,\"flood_rx\":%u,\"direct_rx\":%u,\"recv_errors\":%u}",
+      "fem_rxgain",
+      "f_txdelay",
+      "d_txdelay",
+      "agc_int",
+      "SenseCap_Solar Repeater",
+      "OK - loaded %d regions",
+      "discover.neighbors",
+      "Err - discover.neighbors has no options",
+      "Repeater ID: ",
+      "Seeed SenseCap Solar",
+      "$PCAS04,7",
+      "ERROR: radio init failed: ",
+      "SENSECAP_SOLAR_OTA",
+      "flood.advert.interval ",
+      "advert.interval ",
+      "OK, reboot to apply! New pubkey: ",
+      "flood.max.unscoped ",
+      "flood.max.advert ",
+      "flood.max ",
+      "loop.detect ",
+      "OK - reboot to apply",
+      "flood.advert.interval",
+      "advert.interval",
+      "flood.max.advert",
+      "flood.max.unscoped",
+      "flood.max",
+      "loop.detect",
+      "bootloader.ver",
+      "pwrmgt.support",
+      "pwrmgt.source",
+      "pwrmgt.bootreason",
+      "pwrmgt.bootmv",
+      "region def",
+      "Err - unknown region",
+      "Err - region table full",
+      "OK - (flood allowed)",
+      "reboot",
+      "clkreboot",
+      "advert.zerohop",
+      "OK - zerohop advert sent",
+      "OK - Advert sent",
+      "neighbors",
+      "tempradio ",
+      "region",
+      "gps on",
+      "gps toggle not found",
+      "gps off",
+      "gps sync",
+      "gps provider not found",
+      "gps diag",
+      "gps setloc",
+      "gps advert",
+      "Can't find GPS",
+      "powersaving on",
+      "powersaving off",
+      "powersaving",
+      "stats-radio",
+      "get radio",
+      "set radio ",
+      "Error, invalid radio params",
+      "get cad",
+      "set cad ",
+      "get radio.rxgain",
+      "set radio.rxgain ",
+      "get agc.reset.interval",
+      "set agc.reset.interval ",
+      "get txdelay",
+      "set txdelay ",
+      "get direct.txdelay",
+      "set direct.txdelay ",
+      "Boot Protection",
+      "Cold Boot",
+      "/regions2",
+      "gps_interval",
+      "SX1261",
+      "UF2 Bootloader "
+    ]
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "description": "Canonical reference with Plain-English descriptions, Pre-Upgrade Baseline (Col 1), 2026-11-05 Day-1 Checkpoint (Col 2), 2026-11-06 Day-2 Morning (Col 3), and 2026-11-12 Day-7 Live (Col 4) for SenseCAP Solar Node P1-Pro Unleashed.",
+  "metrics": [
+    {
+      "metric": "Firmware & Antenna",
+      "english_meaning": "The software running on the rooftop repeater and the physical antenna attached to it.",
+      "col1_baseline": "Stock v1.18.0 + 2 dBi small antenna",
+      "col2_checkpoint_2026_11_05": "Unleashed v1.18.0 + MikroTik 6.5 dBi fiberglass antenna",
+      "col3_day2_2026_11_06": "Unleashed v1.18.0 + MikroTik 6.5 dBi fiberglass antenna",
+      "col4_day7_2026_11_12": "Unleashed v1.18.0 + MikroTik 6.5 dBi fiberglass antenna"
+    },
+    {
+      "metric": "Region Flood Scope (region default)",
+      "english_meaning": "The regional tag attached to outgoing broadcasts so regional repeaters forward them.",
+      "col1_baseline": "<null> (Untagged — blocked by regional repeaters)",
+      "col2_checkpoint_2026_11_05": "eu-region (Tagged on both Repeater & Companion)",
+      "col3_day2_2026_11_06": "eu-region (Active)",
+      "col4_day7_2026_11_12": "eu-region (* F / eu-region^ F / eu-sub1 F / eu-metro F)"
+    },
+    {
+      "metric": "Mast Uptime",
+      "english_meaning": "How long the repeater has been running continuously without rebooting or crashing.",
+      "col1_baseline": "95.31 hours (343,102 s)",
+      "col2_checkpoint_2026_11_05": "4.58 hours (16,503 s since Unleashed flash)",
+      "col3_day2_2026_11_06": "19.98 hours (71,917 s — survived freezing night)",
+      "col4_day7_2026_11_12": "166.85 hours / 6.95 days (600,650 s — zero reboots)"
+    },
+    {
+      "metric": "Battery Voltage (ema / raw)",
+      "english_meaning": "How full the lithium battery is (4,200 mV = 100% full, 3,150 mV = empty cutoff). EMA is smoothed to ignore brief radio spikes; raw is the instant reading.",
+      "col1_baseline": "4,120 mV (uncalibrated single reading)",
+      "col2_checkpoint_2026_11_05": "4,063 mV smoothed / 4,065 mV instant (+5 mV gained from afternoon sun)",
+      "col3_day2_2026_11_06": "4,059 mV smoothed / 4,061 mV instant (-4 mV over 15.4h freezing night)",
+      "col4_day7_2026_11_12": "4,041 mV smoothed / 4,040 mV instant (-22 mV total over 7 days = -3.2 mV/day)"
+    },
+    {
+      "metric": "Battery Reading Stability (min16 - max16)",
+      "english_meaning": "The lowest and highest voltage seen across 16 rapid measurements. A tight gap (under 20 mV) means a clean, noise-free battery sensor.",
+      "col1_baseline": "Not measured (only took 1 noisy reading)",
+      "col2_checkpoint_2026_11_05": "4,060 to 4,068 mV (8 mV spread across 16 readings)",
+      "col3_day2_2026_11_06": "4,057 to 4,066 mV (9 mV spread across 16 readings)",
+      "col4_day7_2026_11_12": "4,031 to 4,047 mV (16 mV spread across 16 readings)"
+    },
+    {
+      "metric": "Battery Sensor Speed (us16)",
+      "english_meaning": "How many microseconds the chip spends awake measuring the battery. Faster = less radio blind time and lower battery drain.",
+      "col1_baseline": "50,000 us (50 ms — froze the processor)",
+      "col2_checkpoint_2026_11_05": "4,883 us for 16 readings (305 us per reading — 164x faster)",
+      "col3_day2_2026_11_06": "5,860 us for 16 readings (366 us per reading — 136x faster)",
+      "col4_day7_2026_11_12": "5,860 us for 16 readings (366 us per reading — 136x faster)"
+    },
+    {
+      "metric": "Chip Temperature (temp) & Cold Calibration (cal_t)",
+      "english_meaning": "Current temperature inside the rooftop chip, and the temperature where the battery sensor last auto-calibrated itself (recalibrates every 10°C change so winter frost doesn't fake a low-battery reading).",
+      "col1_baseline": "Unmonitored / Never calibrated",
+      "col2_checkpoint_2026_11_05": "7.25°C current (Auto-calibrated at 15.8°C)",
+      "col3_day2_2026_11_06": "2.25°C current (Auto-recalibrated at 5.8°C overnight)",
+      "col4_day7_2026_11_12": "13.25°C current (Calibrated at 5.8°C)"
+    },
+    {
+      "metric": "Winter Low-Battery Cutoff (cut / strk)",
+      "english_meaning": "The emergency voltage where the repeater shuts down to protect the battery from permanent damage.",
+      "col1_baseline": "None / Hardcoded",
+      "col2_checkpoint_2026_11_05": "3,150 mV (Cold-weather compensated for -15°C frost)",
+      "col3_day2_2026_11_06": "3,150 mV (0 low-voltage strikes)",
+      "col4_day7_2026_11_12": "3,150 mV (strk=0 — zero low-voltage strikes in 7 days)"
+    },
+    {
+      "metric": "Solar / USB Power Status (ext)",
+      "english_meaning": "Whether external 5V USB/strong solar power is currently pushing energy in (1 = charging/external power, 0 = running on battery / MPPT trickle).",
+      "col1_baseline": "Not reported",
+      "col2_checkpoint_2026_11_05": "0 (Running on internal battery at dusk, 16:56 CET)",
+      "col3_day2_2026_11_06": "0 (Running on internal battery at dawn, 08:19 CET)",
+      "col4_day7_2026_11_12": "0 (Solar trickle balancing load via MPPT at 11:11 CET)"
+    },
+    {
+      "metric": "Chip Power Efficiency (dcdc / qspi / gps)",
+      "english_meaning": "Confirming the chip's high-efficiency power converter is ON (dcdc=1) and the unused memory chip (qspi=0x2) and unused GPS chip (gps=0x2) are completely powered off to save ~1.15 mA of battery.",
+      "col1_baseline": "dcdc=0 (OFF), qspi=ON, gps=ON (wasting ~1.15 mA 24/7)",
+      "col2_checkpoint_2026_11_05": "dcdc=1 (ON), qspi=0x2 (Deep Sleep), gps=0x2 (Powered Off)",
+      "col3_day2_2026_11_06": "dcdc=1 (ON), qspi=0x2 (Deep Sleep), gps=0x2 (Powered Off)",
+      "col4_day7_2026_11_12": "dcdc=1 (ON), qspi=0x2 (Deep Sleep), gps=0x2 (Powered Off)"
+    },
+    {
+      "metric": "Radio Booster & Transmitter Health (rxg / clmp / ocp / err)",
+      "english_meaning": "Internal radio settings: rxg=0x96 means maximum receive sensitivity (+3 dB boost); clmp=0xFE & ocp=0x38 mean full +22 dBm transmit power protection is active; err=0x0000 means zero hardware faults.",
+      "col1_baseline": "rxg=0x94 (unboosted), clmp=0xE0 (unpatched bug)",
+      "col2_checkpoint_2026_11_05": "rxg=0x96 (Boosted), clmp=0xFE (Patched), ocp=0x38, err=0x0000",
+      "col3_day2_2026_11_06": "rxg=0x96 (Boosted), clmp=0xFE (Patched), ocp=0x38, err=0x0000",
+      "col4_day7_2026_11_12": "rxg=0x96 (Boosted), clmp=0xFE (Patched), ocp=0x38, err=0x0000"
+    },
+    {
+      "metric": "Background Radio Noise (Quiet RSSI / Noise Floor)",
+      "english_meaning": "How quiet the airwaves are when nobody is talking (more negative is better). -117 dBm is near total silence, allowing faint signals from 150+ km away to be heard.",
+      "col1_baseline": "0 dBm (Broken sensor in stock firmware)",
+      "col2_checkpoint_2026_11_05": "-117.0 dBm (Crystal-clear quiet background)",
+      "col3_day2_2026_11_06": "-117 dBm floor / -127.5 dBm instant (Near-total silence)",
+      "col4_day7_2026_11_12": "-117 dBm floor / -118.0 dBm instant (Clean background)"
+    },
+    {
+      "metric": "Signal Clarity & Strength to Handheld (Last SNR / Last RSSI)",
+      "english_meaning": "How clearly (SNR, higher positive is better; above +10 dB is maximum clarity) and how loudly (RSSI, closer to 0 is stronger) the rooftop repeater hears the handheld.",
+      "col1_baseline": "+9.00 dB clarity / -90 dBm strength",
+      "col2_checkpoint_2026_11_05": "+13.75 dB clarity / -58 dBm strength (>1,000x stronger)",
+      "col3_day2_2026_11_06": "+12.50 to +14.25 dB clarity / -70 dBm strength",
+      "col4_day7_2026_11_12": "+12.75 to +16.00 dB clarity / -62 dBm strength"
+    },
+    {
+      "metric": "Direct 0-Hop Repeater Neighbors (neighbors)",
+      "english_meaning": "Other rooftop repeaters the mast hears directly in a single hop without needing any middleman.",
+      "col1_baseline": "0 direct neighbors",
+      "col2_checkpoint_2026_11_05": "0 direct repeater adverts logged yet (4.5h window)",
+      "col3_day2_2026_11_06": "1 direct neighbor (7.9 km, SNR -10.75 dB)",
+      "col4_day7_2026_11_12": "3 direct neighbors: <peer-1> (-10.75 dB), <peer-2> (-11.0 dB), <peer-3> (7.9 km, -11.0 dB)"
+    },
+    {
+      "metric": "Packets Received (RX Total & Hourly Rate)",
+      "english_meaning": "How many mesh messages and node announcements the repeater has successfully heard from the air (Flood = regional broadcasts, Direct = targeted point-to-point messages).",
+      "col1_baseline": "2,016 total in 95.3h (21.2 packets/hour)",
+      "col2_checkpoint_2026_11_05": "605 total in 4.58h (132.1 packets/hour — 6.2x more traffic)",
+      "col3_day2_2026_11_06": "1,848 total in 19.98h (92.5 packets/hour — 4.4x more traffic)",
+      "col4_day7_2026_11_12": "16,928 total in 166.85h (101.5 packets/hour — 4.8x more traffic)"
+    },
+    {
+      "metric": "Packets Relayed / Sent (TX Total & Hourly Rate)",
+      "english_meaning": "How many messages the repeater has boosted and forwarded across the mesh to help other nodes talk.",
+      "col1_baseline": "1,445 total in 95.3h (15.2 packets/hour)",
+      "col2_checkpoint_2026_11_05": "551 total in 4.58h (120.3 packets/hour — 7.9x more relayed)",
+      "col3_day2_2026_11_06": "1,627 total in 19.98h (81.4 packets/hour — 5.4x more relayed)",
+      "col4_day7_2026_11_12": "13,754 total in 166.85h (82.4 packets/hour — 5.4x more relayed)"
+    },
+    {
+      "metric": "Radio Airtime (TX / RX Seconds)",
+      "english_meaning": "Total seconds the radio spent actively transmitting (TX) and receiving (RX) since boot.",
+      "col1_baseline": "TX = 980 s, RX = 1,259 s (over 95.3 hours)",
+      "col2_checkpoint_2026_11_05": "TX = 351 s, RX = 337 s (over 4.58 hours)",
+      "col3_day2_2026_11_06": "TX = 1,158 s, RX = 1,174 s (over 19.98 hours)",
+      "col4_day7_2026_11_12": "TX = 10,152 s (2.82 h), RX = 11,755 s (3.26 h) over 166.85 hours"
+    },
+    {
+      "metric": "Transmit Failures (TX Errs)",
+      "english_meaning": "Packets that failed to transmit due to radio or hardware errors. Should always be 0.",
+      "col1_baseline": "0 errors",
+      "col2_checkpoint_2026_11_05": "0 errors (100% transmit reliability)",
+      "col3_day2_2026_11_06": "0 errors (100% transmit reliability across 1,627 packets)",
+      "col4_day7_2026_11_12": "0 errors (100% transmit reliability across 13,754 packets)"
+    },
+    {
+      "metric": "Corrupted Weak Signals (RX Error Rate %)",
+      "english_meaning": "Percentage of faint/colliding distant radio signals that arrived too weak or garbled to decode. Lower means cleaner reception.",
+      "col1_baseline": "51.98% (2,182 corrupted out of 4,198)",
+      "col2_checkpoint_2026_11_05": "22.73% (178 corrupted out of 783)",
+      "col3_day2_2026_11_06": "32.75% (900 corrupted out of 2,748)",
+      "col4_day7_2026_11_12": "35.04% (9,133 corrupted out of 26,061 — 17% lower error rate vs stock)"
+    },
+    {
+      "metric": "Total Discovered Nodes on Handheld (M9 Contacts)",
+      "english_meaning": "Total unique repeaters, chat rooms, and users the handheld has discovered through the rooftop repeater.",
+      "col1_baseline": "29 nodes total",
+      "col2_checkpoint_2026_11_05": "66 nodes total (+37 new nodes = +128%)",
+      "col3_day2_2026_11_06": "78 nodes total (+49 new nodes = +169%)",
+      "col4_day7_2026_11_12": "112 nodes total (+83 new nodes = +286% / nearly 4x)"
+    },
+    {
+      "metric": "Long-Range Nodes (> 50 km / > 100 km / Farthest)",
+      "english_meaning": "How many discovered repeaters/rooms are more than 50 km and 100 km away, and the farthest node reached.",
+      "col1_baseline": "6 nodes >50 km | 5 nodes >100 km | Max: 190.5 km",
+      "col2_checkpoint_2026_11_05": "19 nodes >50 km (3.2x) | 13 nodes >100 km (2.6x) | Max: 192.9 km",
+      "col3_day2_2026_11_06": "28 nodes >50 km (4.7x) | 19 nodes >100 km (3.8x) | Max: 354.7 km",
+      "col4_day7_2026_11_12": "48 nodes >50 km (8.0x) | 35 nodes >100 km (7.0x) | Max: 354.7 km & 261.4 km"
+    }
+  ]
+}
