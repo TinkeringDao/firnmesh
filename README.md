@@ -1,10 +1,10 @@
-# SenseCAP Solar P1-Pro Repeater Suite
+# firnmesh
 
-[![CI](https://github.com/TinkeringDao/sensecap-solar-p1-pro-unleashed/actions/workflows/ci.yml/badge.svg)](https://github.com/TinkeringDao/sensecap-solar-p1-pro-unleashed/actions/workflows/ci.yml)
-[![Security](https://github.com/TinkeringDao/sensecap-solar-p1-pro-unleashed/actions/workflows/security.yml/badge.svg)](https://github.com/TinkeringDao/sensecap-solar-p1-pro-unleashed/actions/workflows/security.yml)
+[![CI](https://github.com/TinkeringDao/firnmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/TinkeringDao/firnmesh/actions/workflows/ci.yml)
+[![Security](https://github.com/TinkeringDao/firnmesh/actions/workflows/security.yml/badge.svg)](https://github.com/TinkeringDao/firnmesh/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Board-support patches, 36-point hardware fault audit, C++17 host seam tests, and a zero-dependency USB serial/DFU utility (`p1_tool.py`) for running the **Seeed Studio SenseCAP Solar Node P1-Pro** as an unattended [MeshCore](https://github.com/meshcore-dev/MeshCore) repeater through a **Sub-Zero Continental Winter** (`-15 °C` frost nights and multi-week stratus fog).
+Sub-zero solar Li-Ion MPPT power management, `< 1 µA` QSPI sleep, C++17 host seam tests, and a zero-dependency USB serial/DFU utility (`p1_tool.py`) for **Seeed SenseCAP Solar Node P1-Pro** running as an unattended [MeshCore](https://github.com/meshcore-dev/MeshCore) LoRa repeater through continental winter frost (`-15 °C` nights and multi-week stratus fog).
 
 Target hardware profile: `XIAO nRF52840 Plus` + `Wio-SX1262` (`+22 dBm`) + `XIAO L76K GNSS` + `P25Q16H` 2 MB QSPI flash + `CN3165` solar MPPT charger + `3350 mAh` 18650 NMC cell, tested on a rooftop mast with a `6.5 dBi` 868 MHz fiberglass omnidirectional antenna.
 
@@ -64,9 +64,10 @@ c++ -std=c++17 -Wall -Wextra -I test -I test/host_mocks -I variants/sensecap_sol
 Apply the patch to an upstream [MeshCore](https://github.com/meshcore-dev/MeshCore) checkout and build with PlatformIO:
 
 ```bash
+git clone https://github.com/TinkeringDao/firnmesh.git
 git clone https://github.com/meshcore-dev/MeshCore.git
 cd MeshCore
-git apply /path/to/sensecap-solar-p1-pro-unleashed/patches/sensecap_solar_p1_pro_unleashed.patch
+git apply ../firnmesh/patches/sensecap_solar_p1_pro_unleashed.patch
 pio run -e SenseCap_Solar_repeater
 ```
 
@@ -87,15 +88,12 @@ python3 p1_tool.py configure --name MeshCore-Repeater --freq 869.618 --bw 62.5 -
 - [`test/`](test/): host mocks and C++17 unit tests covering cold cutoffs, SAADC calibration, preamble timeouts, and key-store eviction.
 - [`docs/SENSECAP_P1_PRO_FIRMWARE_AUDIT.md`](docs/SENSECAP_P1_PRO_FIRMWARE_AUDIT.md): 36-point hardware-vs-firmware audit and disassembly notes.
 
-## Hardware & Open-Source Ecosystem Support
+## Prototyping & Component Support
 
-Prototyping, PCB manufacturing, RF/power components, and development tooling for this project are supported by:
+Carrier-board PCB prototyping and passive/interconnect components used in bench testing:
 
-- **[AISLER](https://aisler.net)** — European ENIG PCB manufacturing and stainless-steel SMD stencils made in Germany/EU.
-- **[PCBWay](https://www.pcbway.com)** — Turnkey multi-layer PCB/PCBA prototyping and CNC aluminum outdoor enclosure fabrication.
-- **[Coilcraft](https://www.coilcraft.com)** (`XAL4020-222MEC` shielded power inductors), **[Samtec](https://www.samtec.com)** (`TSW-110-07-G-S` board-to-board headers), and **[WAGO](https://www.wago.com)** (`WAGO 221 + Gelbox IPX8` outdoor splices and `2060` SMD PCB terminal blocks).
-- **[Heltec Automation](https://heltec.org)** (`Mesh Node T114 V2.0` `nRF52840 + SX1262` and `Vision Master E213` E-Ink field nodes) and **[Seeed Studio](https://www.seeedstudio.com)** (`SenseCAP Solar P1-Pro`, `XIAO nRF52840`, `Wio-SX1262`).
-- **[JetBrains](https://www.jetbrains.com/?from=TinkeringDao)** — Embedded C/C++ and Python development powered by CLion and PyCharm under the JetBrains Open Source Program.
+- [AISLER](https://aisler.net) for European ENIG PCB manufacturing and stainless-steel SMD stencils made in Germany/EU.
+- [Coilcraft](https://www.coilcraft.com) (`XAL4020-222MEC` shielded power inductors), [Samtec](https://www.samtec.com) (`TSW-110-07-G-S` board-to-board headers), and [WAGO](https://www.wago.com) (`221 + Gelbox IPX8` outdoor splices and `2060` SMD PCB terminal blocks).
 
 ## License & Legal
 

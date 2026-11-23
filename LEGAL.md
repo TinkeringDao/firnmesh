@@ -2,7 +2,7 @@
 
 ## 1. Independent Open-Source Project & Non-Affiliation (Nominative Fair Use)
 
-**`sensecap-solar-p1-pro-unleashed` — Unofficial Interoperability & Repeater Firmware Suite for Seeed SenseCAP Solar Node P1-Pro** is an **independent, non-commercial, community-developed free and open-source software and hardware documentation project** created solely to improve power management, sub-zero battery protection, peripheral sleep states, and LoRa repeater interoperability on user-owned hardware.
+**`firnmesh` — Unofficial Interoperability & Repeater Firmware Suite for Seeed SenseCAP Solar Node P1-Pro** is an **independent, non-commercial, community-developed free and open-source software and hardware documentation project** created solely to improve power management, sub-zero battery protection, peripheral sleep states, and LoRa repeater interoperability on user-owned hardware.
 
 - **No Affiliation or Endorsement:** This project is **not affiliated with, authorized by, sponsored by, or endorsed by Seeed Technology Co., Ltd. (`Seeed Studio`), Nordic Semiconductor ASA, Semtech Corporation, MikroTikls SIA (`MikroTik`), Quectel Wireless Solutions Co., Ltd., Consonance Electronics (`CN3165`), Puya Semiconductor (`P25Q16H`), or Ripple Radios / MeshCore.**
 - **Indication of Intended Purpose & Nominative Fair Use:**

@@ -8,7 +8,7 @@
 
 ## Hardware, Flash, & RF Safety Boundaries
 
-`sensecap-solar-p1-pro-unleashed` operates strictly on user-owned `SenseCAP Solar Node P1-Pro` hardware via standard open Adafruit `nRF52` UF2 / CDC DFU interfaces:
+`firnmesh` operates strictly on user-owned `SenseCAP Solar Node P1-Pro` hardware via standard open Adafruit `nRF52` UF2 / CDC DFU interfaces:
 - **Preserves Factory UF2 Bootloader & SoftDevice**: Application images link at `0x00026000` / `0x00027000` above Nordic SoftDevice `S140 v7.3.0` and leave the factory UF2 bootloader (`0x000F4000`) intact. You can revert to stock Seeed / MeshCore firmware at any time via double-tap Reset USB UF2 drag-and-drop.
 - **Hardware Watchdog & Brownout Protection**: Enables the `60 s` hardware watchdog (`NRF_WDT`) and two-stage sub-zero hibernation (`3250 mV` Stage-1 bandgap poll / `3050 mV` Stage-2 `SYSTEMOFF` + `LPCOMP`) to protect the `18650` Li-Ion cell from deep over-discharge.
 - **Authorized Local Owner Execution Only (`18 U.S.C. § 1030 (CFAA)`)**: [`p1_tool.py`](p1_tool.py) communicates exclusively with locally attached USB CDC serial devices owned by the operator.
@@ -17,5 +17,5 @@
 ## Reporting a Vulnerability
 
 If you discover a memory safety issue, packet parser bug, or power state regression:
-1. Open a private security advisory via [GitHub Security Advisories](https://github.com/TinkeringDao/sensecap-solar-p1-pro-unleashed/security/advisories/new).
+1. Open a private security advisory via [GitHub Security Advisories](https://github.com/TinkeringDao/firnmesh/security/advisories/new).
 2. Include the firmware commit SHA, `silicon` / `rfdiag` / `battdiag` CLI output from `p1_tool.py`, and steps to reproduce.
