@@ -82,9 +82,20 @@ python3 p1_tool.py configure --name MeshCore-Repeater --freq 869.618 --bw 62.5 -
 
 - [`variants/sensecap_solar/`](variants/sensecap_solar/): nRF52840 board support, pure-function seam header [`SenseCapSolarSeams.h`](variants/sensecap_solar/SenseCapSolarSeams.h), and `platformio.ini`.
 - [`patches/sensecap_solar_p1_pro_unleashed.patch`](patches/sensecap_solar_p1_pro_unleashed.patch): unified patch against upstream `MeshCore`.
+- [`hardware/sensecap_solar_mppt_carrier.kicad_pcb`](hardware/sensecap_solar_mppt_carrier.kicad_pcb): KiCad 8.0 MPPT & sensor carrier daughterboard (`Coilcraft XAL4020-222MEC`, `Samtec TSW-110-07-G-S`, `WAGO 2060`, `LTC3105` / `DS3231M` / `MAX17048`) with AISLER front-silkscreen emblem.
 - [`p1_tool.py`](p1_tool.py): Python 3 standard-library CLI for UF2/DFU flashing, serial status queries, and radio configuration.
 - [`test/`](test/): host mocks and C++17 unit tests covering cold cutoffs, SAADC calibration, preamble timeouts, and key-store eviction.
 - [`docs/SENSECAP_P1_PRO_FIRMWARE_AUDIT.md`](docs/SENSECAP_P1_PRO_FIRMWARE_AUDIT.md): 36-point hardware-vs-firmware audit and disassembly notes.
+
+## Hardware & Open-Source Ecosystem Support
+
+Prototyping, PCB manufacturing, RF/power components, and development tooling for this project are supported by:
+
+- **[AISLER](https://aisler.net)** — European ENIG PCB manufacturing and stainless-steel SMD stencils made in Germany/EU.
+- **[PCBWay](https://www.pcbway.com)** — Turnkey multi-layer PCB/PCBA prototyping and CNC aluminum outdoor enclosure fabrication.
+- **[Coilcraft](https://www.coilcraft.com)** (`XAL4020-222MEC` shielded power inductors), **[Samtec](https://www.samtec.com)** (`TSW-110-07-G-S` board-to-board headers), and **[WAGO](https://www.wago.com)** (`WAGO 221 + Gelbox IPX8` outdoor splices and `2060` SMD PCB terminal blocks).
+- **[Heltec Automation](https://heltec.org)** (`Mesh Node T114 V2.0` `nRF52840 + SX1262` and `Vision Master E213` E-Ink field nodes) and **[Seeed Studio](https://www.seeedstudio.com)** (`SenseCAP Solar P1-Pro`, `XIAO nRF52840`, `Wio-SX1262`).
+- **[JetBrains](https://www.jetbrains.com/?from=TinkeringDao)** — Embedded C/C++ and Python development powered by CLion and PyCharm under the JetBrains Open Source Program.
 
 ## License & Legal
 
